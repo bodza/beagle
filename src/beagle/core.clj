@@ -1661,14 +1661,14 @@
         )
     ))
 
-    (def #_"any" LispReader'read (λ [#_"PushbackReader" r, #_"map" scope, #_"Character" delim]
+    (def #_"any" LispReader'read (λ [#_"PushbackReader" r, #_"map" scope, #_"Character" delim, #_"any" delim!]
         (loop []
             (let [#_"char" ch (loop [ch (LispReader'read1 r)] (if (and (some? ch) (LispReader'isWhitespace ch)) (recur (LispReader'read1 r)) ch))]
                 (cond
                     (nil? ch)
                         (-/throw! "EOF while reading")
                     (and (some? delim) (= delim ch))
-                        delim
+                        delim!
                     (LispReader'isDigit ch, 10)
                         (LispReader'readNumber r, ch)
                     :else
@@ -1694,10 +1694,12 @@
         )
     ))
 
+    (def #_"any" LispReader'READ_FINISHED (anew 0))
+
     (def #_"seq" LispReader'readDelimitedForms (λ [#_"PushbackReader" r, #_"map" scope, #_"char" delim]
         (loop [#_"seq" z nil]
-            (let [#_"any" form (LispReader'read r, scope, delim)]
-                (if (= form delim)
+            (let [#_"any" form (LispReader'read r, scope, delim, LispReader'READ_FINISHED)]
+                (if (identical? form LispReader'READ_FINISHED)
                     (reverse z)
                     (recur (cons form z))
                 )
@@ -1739,12 +1741,12 @@
     ))
 
     (def #_"any" discard-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"char" _delim]
-        (LispReader'read r, scope, nil)
+        (LispReader'read r, scope, nil, nil)
         r
     ))
 
     (def #_"any" quote-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"char" _delim]
-        (list (symbol! 'quote) (LispReader'read r, scope, nil))
+        (list (symbol! 'quote) (LispReader'read r, scope, nil, nil))
     ))
 
     (declare LispReader'dispatchMacros)
@@ -1814,7 +1816,7 @@
     )
 )
 
-(def read (λ [] (LispReader'read -/System'in, nil, nil)))
+(def read (λ [] (LispReader'read -/System'in, nil, nil, nil)))
 )
 
 (about #_"Beagle"
