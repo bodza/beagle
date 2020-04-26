@@ -23,7 +23,7 @@
     )
 )
 
-(refer! clojure.core [-> < <= == and assoc bit-and bit-shift-left bit-shift-right char cond cons contains? count declare defmacro hash-map identical? instance? int keyword? list map? name namespace or str the-ns unchecked-add-int unchecked-dec-int unchecked-inc-int unchecked-subtract-int vals var? when])
+(refer! clojure.core [-> < <= == and bit-and bit-shift-left bit-shift-right char cond cons count declare defmacro identical? instance? int keyword? list map? name namespace or str the-ns unchecked-add-int unchecked-dec-int unchecked-inc-int unchecked-subtract-int var? when])
 
 (defn throw! [#_"String" s] (throw (Error. s)))
 
@@ -122,11 +122,12 @@
 
 (-/import!)
 
-(-/refer! beagle.bore [-> -seq -seq? -symbol -symbol? < <= == A'clone A'get A'length A'new A'set Appendable''append AtomicReference''compareAndSet AtomicReference''get AtomicReference''set AtomicReference'new Character'digit Character'isWhitespace Character'valueOf Counted''count Flushable''flush IFn''applyTo ISeq''first ISeq''next Integer'parseInt Matcher''matches Namespace''findInternedVar Number''toString Object''equals Object''toString Pattern''matcher Pattern'compile PushbackReader''unread Reader''read Seqable''seq String''charAt String''indexOf String''length String''substring StringBuilder''append StringBuilder''toString StringBuilder'new System'arraycopy System'in System'out Var''-get and array? assoc bit-and bit-shift-left bit-shift-right char char? clojure-counted? clojure-fn? clojure-seqable? cond cons contains? count declare hash-map identical? instance? int int! keyword? list map? name namespace number? or str string? the-ns throw! unchecked-add-int unchecked-dec-int unchecked-inc-int unchecked-subtract-int vals var? when])
+(-/refer! beagle.bore [-> -seq -seq? -symbol -symbol? < <= == A'clone A'get A'length A'new A'set Appendable''append AtomicReference''compareAndSet AtomicReference''get AtomicReference''set AtomicReference'new Character'digit Character'isWhitespace Character'valueOf Counted''count Flushable''flush IFn''applyTo ISeq''first ISeq''next Integer'parseInt Matcher''matches Namespace''findInternedVar Number''toString Object''equals Object''toString Pattern''matcher Pattern'compile PushbackReader''unread Reader''read Seqable''seq String''charAt String''indexOf String''length String''substring StringBuilder''append StringBuilder''toString StringBuilder'new System'arraycopy System'in System'out Var''-get and array? bit-and bit-shift-left bit-shift-right char char? clojure-counted? clojure-fn? clojure-seqable? cond cons count declare identical? instance? int int! keyword? list map? name namespace number? or str string? the-ns throw! unchecked-add-int unchecked-dec-int unchecked-inc-int unchecked-subtract-int var? when])
 
 (-/defmacro about [& s] (-/cons 'do s))
 
 (-/defmacro λ    [& s] (-/cons 'fn* s))
+(-/defmacro ζ    [& s] (-/cons 'fn* s))
 (-/defmacro let  [& s] (-/cons 'let* s))
 (-/defmacro loop [& s] (-/cons 'loop* s))
 
@@ -186,9 +187,9 @@
     (def third  (λ [s] (first (next (next s)))))
     (def fourth (λ [s] (first (next (next (next s))))))
 
-    (def reduce (λ [f r s] (let [s (seq s)] (if (some? s) (recur f (f r (first s)) (next s)) r))))
+    (def reduce (λ [f r s] (let [s (seq s)] (if (some? s) (#_recur reduce f (f r (first s)) (next s)) r))))
 
-    (def reduce-kv (λ [f r kvs] (let [kvs (seq kvs)] (if (some? kvs) (recur f (f r (first kvs) (second kvs)) (next (next kvs))) r))))
+    (def reduce-kv (λ [f r kvs] (let [kvs (seq kvs)] (if (some? kvs) (#_recur reduce-kv f (f r (first kvs) (second kvs)) (next (next kvs))) r))))
 )
 
 (about #_"beagle.Counted"
@@ -577,6 +578,32 @@
 (def list (λ [& s] (if (some? s) (reverse (reverse s)) Cons'nil)))
 
 (def reverse! (λ [s] (reduce (λ [%1 %2] (-/cons %2 %1)) (-/list) s)))
+
+(about #_"Cons"
+    (def #_"seq" Cons''keys (λ [#_"Cons" this]
+        (loop [#_"seq" z nil #_"seq" s (seq this)]
+            (if (some? s)
+                (recur (cons (first s) z) (next (next s)))
+                (when (some? z) (reverse z))
+            )
+        )
+    ))
+
+    (def #_"seq" Cons''vals (λ [#_"Cons" this]
+        (loop [#_"seq" z nil #_"seq" s (seq this)]
+            (if (some? s)
+                (recur (cons (second s) z) (next (next s)))
+                (when (some? z) (reverse z))
+            )
+        )
+    ))
+)
+
+(def some (λ [f s]
+    (when (seq s)
+        (or (f (first s)) (#_recur some f (next s)))
+    )
+))
 )
 
 (about #_"beagle.ArrayMap"
@@ -643,19 +670,6 @@
         (< -1 (ArrayMap'index-of (ArrayMap''array this), key))
     ))
 
-    (def #_"ArrayMap" ArrayMap''dissoc (λ [#_"ArrayMap" this, #_"key" key]
-        (let [
-            #_"array" a (ArrayMap''array this) #_"int" i (ArrayMap'index-of a, key)
-        ]
-            (if (< -1 i)
-                (let [#_"int" n (- (alength a) 2)]
-                    (if (pos? n) (ArrayMap'new (acopy! (acopy! (anew n) 0 a 0 i) i a (+ i 2) (- n i))) ArrayMap'EMPTY)
-                )
-                this
-            )
-        )
-    ))
-
     (declare contains?)
     (declare get)
 
@@ -684,14 +698,6 @@
     )
 ))
 
-(def dissoc (λ [m k]
-    (cond
-        (nil? m)       nil
-        (array-map? m) (ArrayMap''dissoc m, k)
-        :else          (-/throw! (str "dissoc not supported on " m))
-    )
-))
-
 (def array-map (λ [& kvs] (if (some? kvs) (reduce-kv assoc ArrayMap'EMPTY kvs) ArrayMap'EMPTY)))
 
 (def contains? (λ [m k]
@@ -710,7 +716,7 @@
     )
 ))
 
-(def update (λ [m k f] (assoc m k (f (get m k)))))
+(def update (λ [m k f & s] (assoc m k (apply f (get m k) s))))
 )
 
 (about #_"beagle.Var"
@@ -781,19 +787,22 @@
         )
     ))
 
-    (def #_"gen" Compiler'emitLocal (λ [#_"map" scope, #_"gen" gen, #_"LocalBinding" lb]
-        (if (-/contains? (deref (get (get scope :fun) :'closes)) (get lb :uid))
+    (declare Binding''sym)
+    (declare Binding''idx)
+
+    (def #_"gen" Compiler'emitLocal (λ [#_"map" scope, #_"gen" gen, #_"Binding" lb]
+        (if (some (λ [%] (#_= identical? % lb)) (deref (get (get scope :fun) :'closes)))
             (let [
                 gen (Gen''load gen, 0)
-                gen (Gen''get gen, (get lb :sym))
+                gen (Gen''get gen, (Binding''sym lb))
             ]
                 gen
             )
-            (Gen''load gen, (get lb :idx))
+            (Gen''load gen, (Binding''idx lb))
         )
     ))
 
-    (def #_"gen" Compiler'emitLocals (λ [#_"map" scope, #_"gen" gen, #_"LocalBinding*" locals]
+    (def #_"gen" Compiler'emitLocals (λ [#_"map" scope, #_"gen" gen, #_"Binding*" locals]
         (let [
             gen (Gen''push gen, (<< (count locals) 1))
             gen (Gen''anew gen)
@@ -801,10 +810,10 @@
             (loop [gen gen #_"int" i 0 #_"seq" s (seq locals)]
                 (if (some? s)
                     (let [
-                        #_"LocalBinding" lb (first s)
+                        #_"Binding" lb (first s)
                         gen (Gen''dup gen)
                         gen (Gen''push gen, i)
-                        gen (Gen''push gen, (get lb :sym))
+                        gen (Gen''push gen, (Binding''sym lb))
                         gen (Gen''aset gen)
                         i (inc i)
                         gen (Gen''dup gen)
@@ -990,27 +999,26 @@
     ))
 )
 
-(let [last-uid' (atom 0)] (def next-uid! (λ [] (swap! last-uid' inc))))
-
-(about #_"LocalBinding"
-    (def #_"LocalBinding" LocalBinding'new (λ [#_"Symbol" sym, #_"int" idx]
-        (array-map
-            #_"int" :uid (next-uid!)
-            #_"Symbol" :sym sym
-            #_"int" :idx idx
-        )
+(about #_"Binding"
+    (def #_"Binding" Binding'new (λ [#_"Symbol" sym, #_"int" idx]
+        (-> (anew 3) (aset! 0 :Binding) (aset! 1 sym) (aset! 2 idx))
     ))
+
+    (def local-binding? (λ [x] (and (-/array? x) (= (alength x) 3) (= (aget x 0) :Binding))))
+
+    (def #_"Symbol" Binding''sym (λ [#_"Binding" this] (when (local-binding? this) (aget this 1))))
+    (def #_"int"    Binding''idx (λ [#_"Binding" this] (when (local-binding? this) (aget this 2))))
 )
 
-(about #_"LocalBindingExpr"
-    (def #_"LocalBindingExpr" LocalBindingExpr'new (λ [#_"LocalBinding" lb]
+(about #_"BindingExpr"
+    (def #_"BindingExpr" BindingExpr'new (λ [#_"Binding" lb]
         (array-map
-            #_"keyword" :class :LocalBindingExpr
-            #_"LocalBinding" :lb lb
+            #_"keyword" :class :BindingExpr
+            #_"Binding" :lb lb
         )
     ))
 
-    (def #_"gen" LocalBindingExpr''emit (λ [#_"LocalBindingExpr" this, #_"Context" context, #_"map" scope, #_"gen" gen]
+    (def #_"gen" BindingExpr''emit (λ [#_"BindingExpr" this, #_"Context" context, #_"map" scope, #_"gen" gen]
         (if (not= context :Context'STATEMENT) (Compiler'emitLocal scope, gen, (get this :lb)) gen)
     ))
 )
@@ -1020,8 +1028,8 @@
         (array-map
             #_"keyword" :class :FnExpr
             #_"FnExpr" :parent parent
-            #_"{int LocalBinding}" :locals (array-map)
-            #_"{int LocalBinding}'" :'closes (atom (-/hash-map))
+            #_"Binding*" :locals nil
+            #_"Binding*'" :'closes (atom nil)
             #_"int" :arity nil
             #_"Expr" :body nil
         )
@@ -1034,9 +1042,9 @@
             scope
                 (if (some? name)
                     (let [
-                        #_"LocalBinding" lb (LocalBinding'new name, 0)
-                        scope (update scope :local-env (λ [%] (assoc % (get lb :sym) lb)))
-                        scope (update scope :fun (λ [%] (update % :locals (λ [%] (assoc % (get lb :uid) lb)))))
+                        #_"Binding" lb (Binding'new name, 0)
+                        scope (update scope :local-env assoc (Binding''sym lb) lb)
+                        scope (update scope :fun update :locals (λ [%] (cons lb %)))
                     ]
                         scope
                     )
@@ -1059,9 +1067,9 @@
                                         :else
                                             (let [
                                                 arity (if (not variadic?) (inc arity) (- 0 (inc arity)))
-                                                #_"LocalBinding" lb (LocalBinding'new sym, (abs arity))
-                                                scope (update scope :local-env (λ [%] (assoc % (get lb :sym) lb)))
-                                                scope (update scope :fun (λ [%] (update % :locals (λ [%] (assoc % (get lb :uid) lb)))))
+                                                #_"Binding" lb (Binding'new sym, (abs arity))
+                                                scope (update scope :local-env assoc (Binding''sym lb) lb)
+                                                scope (update scope :fun update :locals (λ [%] (cons lb %)))
                                             ]
                                                 (recur scope arity variadic? (next s))
                                             )
@@ -1073,7 +1081,7 @@
                         )
                         (if (and variadic? (not (neg? arity)))
                             (-/throw! "missing variadic parameter")
-                            (update scope :fun (λ [%] (assoc % :arity arity)))
+                            (update scope :fun assoc :arity arity)
                         )
                     )
                 )
@@ -1085,7 +1093,7 @@
     (def #_"gen" FnExpr''emit (λ [#_"FnExpr" this, #_"Context" context, #_"map" scope, #_"gen" gen]
         (if (not= context :Context'STATEMENT)
             (let [
-                gen (Compiler'emitLocals scope, gen, (-/vals (deref (get this :'closes))))
+                gen (Compiler'emitLocals scope, gen, (deref (get this :'closes)))
                 gen (Gen''invoke-1 gen, ArrayMap'create)
             ]
                 (Gen''create gen, this)
@@ -1176,15 +1184,15 @@
     (def #_"gen" Expr''emit (λ [#_"Expr" this, #_"Context" context, #_"map" scope, #_"gen" gen]
         (let [#_"keyword" k (get this :class)]
             (cond
-                (= k :LiteralExpr)      (LiteralExpr''emit this, context, scope, gen)
-                (= k :VarExpr)          (VarExpr''emit this, context, scope, gen)
-                (= k :BodyExpr)         (BodyExpr''emit this, context, scope, gen)
-                (= k :IfExpr)           (IfExpr''emit this, context, scope, gen)
-                (= k :InvokeExpr)       (InvokeExpr''emit this, context, scope, gen)
-                (= k :LocalBindingExpr) (LocalBindingExpr''emit this, context, scope, gen)
-                (= k :FnExpr)           (FnExpr''emit this, context, scope, gen)
-                (= k :DefExpr)          (DefExpr''emit this, context, scope, gen)
-                :else                   (-/throw! (str "Expr''emit not supported on " this))
+                (= k :LiteralExpr) (LiteralExpr''emit this, context, scope, gen)
+                (= k :VarExpr)     (VarExpr''emit this, context, scope, gen)
+                (= k :BodyExpr)    (BodyExpr''emit this, context, scope, gen)
+                (= k :IfExpr)      (IfExpr''emit this, context, scope, gen)
+                (= k :InvokeExpr)  (InvokeExpr''emit this, context, scope, gen)
+                (= k :BindingExpr) (BindingExpr''emit this, context, scope, gen)
+                (= k :FnExpr)      (FnExpr''emit this, context, scope, gen)
+                (= k :DefExpr)     (DefExpr''emit this, context, scope, gen)
+                :else              (-/throw! (str "Expr''emit not supported on " this))
             )
         )
     ))
@@ -1196,12 +1204,9 @@
             '&          nil
             'def        DefExpr'parse
             'do         BodyExpr'parse
-            'λ          FnExpr'parse
+            'λ          FnExpr'parse            'ζ          FnExpr'parse
             'if         IfExpr'parse
-            'let        LetExpr'parse
-            'loop       LetExpr'parse
             'quote      LiteralExpr'parse
-            'recur      RecurExpr'parse
         )
     )
 
@@ -1213,10 +1218,12 @@
             'cond       (λ [& s]   (when s (list 'if (first s) (second s) (cons 'cond (next (next s))))))
             'and        (λ [& s]   (if s (let [x (first s) s (next s)] (if s (list 'let (list '&and x) (list 'if '&and (cons 'and s) '&and)) x)) true))
             'or         (λ [& s]   (when s (let [x (first s) s (next s)] (if s (list 'let (list '&or x) (list 'if '&or '&or (cons 'or s))) x))))
-            '->         (λ [x & s] (if s (recur (let [f (first s)] (if (seq? f) (cons (first f) (cons x (next f))) (list f x))) (next s)) x))
+            '->         (ζ -> [x & s] (if s (#_recur -> (let [f (first s)] (if (seq? f) (cons (first f) (cons x (next f))) (list f x))) (next s)) x))
+            'let        (λ [a & s] (cons (cons 'λ (cons (Cons''keys a) s)) (Cons''vals a)))
+            'loop       (λ [a & s] (cons (cons 'ζ (cons 'recur (cons (Cons''keys a) s))) (Cons''vals a)))
         )
     )
- 
+
     (def #_"edn" Compiler'macroexpand1 (λ [#_"edn" form, #_"map" scope]
         (if (seq? form)
             (let [#_"fn" f'macro (get Compiler'macros (first form))]
@@ -1228,14 +1235,14 @@
 
     (def #_"edn" Compiler'macroexpand (λ [#_"edn" form, #_"map" scope]
         (let [#_"edn" me (Compiler'macroexpand1 form, scope)]
-            (if (#_= identical? me form) form (recur me, scope))
+            (if (#_= identical? me form) form (#_recur Compiler'macroexpand me, scope))
         )
     ))
 
-    (def #_"void" Compiler'closeOver (λ [#_"LocalBinding" lb, #_"FnExpr" fun]
-        (when (and (some? lb) (some? fun) (not (contains? (get fun :locals) (get lb :uid))))
+    (def #_"void" Compiler'closeOver (λ [#_"Binding" lb, #_"FnExpr" fun]
+        (when (and (some? lb) (some? fun) (not (some (λ [%] (#_= identical? % lb)) (get fun :locals))))
             (do
-                (swap! (get fun :'closes) -/assoc (get lb :uid) lb)
+                (swap! (get fun :'closes) (λ [%] (cons lb %)))
                 (Compiler'closeOver lb, (get fun :parent))
             )
         )
@@ -1249,11 +1256,11 @@
                     (LiteralExpr'new sym)
                 )
                 (when (nil? (Symbol''ns sym))
-                    (let [#_"LocalBinding" lb (get (get scope :local-env) sym)]
+                    (let [#_"Binding" lb (get (get scope :local-env) sym)]
                         (when (some? lb)
                             (do
                                 (Compiler'closeOver lb, (get scope :fun))
-                                (LocalBindingExpr'new lb)
+                                (BindingExpr'new lb)
                             )
                         )
                     )
@@ -1477,7 +1484,7 @@
         )
     ))
 
-    (def #_"Pattern" LispReader'rxSymbol (-/Pattern'compile "(?:-/)?[-+:a-zA-Z_*?!<=>&%λ][-+:a-zA-Z_*?!<=>&%0-9'#]*"))
+    (def #_"Pattern" LispReader'rxSymbol (-/Pattern'compile "(?:-/)?[-+:a-zA-Z_*?!<=>&%λζ][-+:a-zA-Z_*?!<=>&%0-9'#]*"))
 
     (def #_"symbol" LispReader'matchSymbol (λ [#_"String" s]
         (let [#_"Matcher" m (-/Pattern''matcher LispReader'rxSymbol, s)]
@@ -1654,9 +1661,9 @@
 (about #_"Beagle"
 
 (def repl (λ []
-    (let [! (-/char 27)] (print (str ! "[31mBeagle " ! "[32m=> " ! "[0m")))
+    (let [esc (-/char 27)] (print (str esc "[31mBeagle " esc "[32m=> " esc "[0m")))
     (flush)
     (-> (read) (eval) (prn))
-    (recur)
+    (#_recur repl)
 ))
 )
