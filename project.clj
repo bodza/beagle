@@ -4,6 +4,6 @@
 ;   :global-vars {*warn-on-reflection* true}
     :jvm-opts ["-Xmx6g"] ; "-Xss16m"
     :javac-options ["-g"]
-    :source-paths ["src"] :java-source-paths ["src"]
+    :source-paths ["src"]
 ;   :main beagle.core
     :aliases {"beagle" ["run" "-m" "beagle.core"]})

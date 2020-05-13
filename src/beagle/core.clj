@@ -10,11 +10,10 @@
 (-/defmacro import! [& syms-or-seqs] `(do (doseq [n# (keys (ns-imports *ns*))] (ns-unmap *ns* n#)) (import ~@syms-or-seqs)))
 
 (import!
-    [java.lang Appendable Character Error Integer Long Number Object String StringBuilder System]
+    [java.lang Appendable Character Error Integer Long Number String StringBuilder System]
     [java.io Flushable PrintWriter PushbackReader Reader]
     [java.util.regex Matcher Pattern]
     [clojure.lang Counted IFn ISeq Namespace Seqable Var]
-    [beagle.util.concurrent.atomic AtomicReference]
 )
 
 (-/defmacro refer! [ns s]
@@ -45,12 +44,10 @@
 
 (defn #_"String" Number''toString [^Number this] (.toString this))
 
-(defn #_"boolean" Object''equals   [^Object this, #_"Object" that] (.equals this, that))
-(defn #_"String"  Object''toString [^Object this]                  (.toString this))
-
 (defn string? [x] (instance? String x))
 
 (defn #_"char"    String''charAt     [^String this, #_"int" i]    (.charAt this, i))
+(defn #_"boolean" String''equals     [^String this, #_"any" that] (.equals this, that))
 (defn #_"int"     String''indexOf   ([^String this, #_"int" ch]   (.indexOf this, ch))     ([^String this, #_"String" s, #_"int" from] (.indexOf this, s, from)))
 (defn #_"int"     String''length     [^String this]               (.length this))
 (defn #_"String"  String''substring ([^String this, #_"int" from] (.substring this, from)) ([^String this, #_"int" from, #_"int" over] (.substring this, from, over)))
@@ -97,12 +94,6 @@
 
 (defn #_"any" Var''-get [^Var this] (.get this))
 
-(defn #_"AtomicReference" AtomicReference'new [#_"any" init] (AtomicReference. init))
-
-(defn #_"boolean" AtomicReference''compareAndSet [^AtomicReference this, #_"any" x, #_"any" y] (.compareAndSet this, x, y))
-(defn #_"any"     AtomicReference''get           [^AtomicReference this]                       (.get this))
-(defn #_"void"    AtomicReference''set           [^AtomicReference this, #_"any" x]            (.set this, x))
-
 (defn A'new [n] (object-array n))
 
 (defn A'clone  [^"[Ljava.lang.Object;" a]     (aclone a))
@@ -122,7 +113,7 @@
 
 (-/import!)
 
-(-/refer! beagle.bore [-> -seq -seq? -symbol -symbol? < <= == A'clone A'get A'length A'new A'set Appendable''append AtomicReference''compareAndSet AtomicReference''get AtomicReference''set AtomicReference'new Character'digit Character'isWhitespace Character'valueOf Counted''count Flushable''flush IFn''applyTo ISeq''first ISeq''next Integer'parseInt Matcher''matches Namespace''findInternedVar Number''toString Object''equals Object''toString Pattern''matcher Pattern'compile PushbackReader''unread Reader''read Seqable''seq String''charAt String''indexOf String''length String''substring StringBuilder''append StringBuilder''toString StringBuilder'new System'arraycopy System'in System'out Var''-get and array? bit-and bit-shift-left bit-shift-right char char? clojure-counted? clojure-fn? clojure-seqable? cond cons count declare identical? instance? int int! keyword? list map? name namespace number? or str string? the-ns throw! unchecked-add-int unchecked-dec-int unchecked-inc-int unchecked-subtract-int var? when])
+(-/refer! beagle.bore [-> -seq -seq? -symbol -symbol? < <= == A'clone A'get A'length A'new A'set Appendable''append Character'digit Character'isWhitespace Character'valueOf Counted''count Flushable''flush IFn''applyTo ISeq''first ISeq''next Integer'parseInt Matcher''matches Namespace''findInternedVar Number''toString Pattern''matcher Pattern'compile PushbackReader''unread Reader''read Seqable''seq String''charAt String''equals String''indexOf String''length String''substring StringBuilder''append StringBuilder''toString StringBuilder'new System'arraycopy System'in System'out Var''-get and array? bit-and bit-shift-left bit-shift-right char char? clojure-counted? clojure-fn? clojure-seqable? cond cons count declare identical? instance? int int! keyword? list map? name namespace number? or str string? the-ns throw! unchecked-add-int unchecked-dec-int unchecked-inc-int unchecked-subtract-int var? when])
 
 (-/defmacro about [& s] (-/cons 'do s))
 
@@ -212,6 +203,8 @@
 )
 
 (about #_"arrays"
+    (def anew (λ [n] (-/A'new n)))
+
     (def aget    (λ [a i] (-/A'get a i)))
     (def alength (λ [a]   (-/A'length a)))
 
@@ -219,7 +212,9 @@
     (def acopy! (λ [a i b j n] (-/System'arraycopy b, j, a, i, n) a))
     (def aset!  (λ [a i x]     (-/A'set a i x) a))
 
-    (def anew (λ [n] (-/A'new n)))
+    (def volatile-acas! (λ [a i x y] (when (identical? (aget a i) x) (aset! a i y))))
+    (def volatile-aget  (λ [a i]     (aget a i)))
+    (def volatile-aset! (λ [a i x]   (aset! a i x)))
 )
 
 (about #_"append, str, pr, prn"
@@ -312,7 +307,7 @@
             (cons? x)        (append-seq a x)
           #_(array-map? x) #_(append-map a x)
             (atom? x)        (-/Appendable''append a, "atom")
-            :else            (-/Appendable''append a, (-/Object''toString x))
+            :else            (-/Appendable''append a, "object")
         )
     ))
 
@@ -377,27 +372,25 @@
     (def Atom'meta (λ [] ))
 
     (def #_"Atom" Atom'new (λ [#_"any" init]
-        (-> (anew 2) (aset! 0 Atom'meta) (aset! 1 (-/AtomicReference'new init)))
+        (-> (anew 2) (aset! 0 Atom'meta) (volatile-aset! 1 init))
     ))
 
     (def atom? (λ [x] (and (-/array? x) (= (alength x) 2) (identical? (aget x 0) Atom'meta))))
 
-    (def #_"AtomicReference" Atom''ref (λ [#_"Atom" this] (when (atom? this) (aget this 1))))
-
     (def #_"any" Atom''deref (λ [#_"Atom" this]
-        (-/AtomicReference''get (Atom''ref this))
+        (volatile-aget this 1)
     ))
 
     (def #_"any" Atom''swap (λ [#_"Atom" this, #_"fn" f, #_"seq" s]
         (loop []
-            (let [#_"any" o (-/AtomicReference''get (Atom''ref this)) #_"any" o' (apply f o s)]
-                (if (-/AtomicReference''compareAndSet (Atom''ref this), o, o') o' (recur))
+            (let [#_"any" o (volatile-aget this 1) #_"any" o' (apply f o s)]
+                (if (volatile-acas! this 1 o o') o' (recur))
             )
         )
     ))
 
     (def #_"any" Atom''reset (λ [#_"Atom" this, #_"any" o']
-        (-/AtomicReference''set (Atom''ref this), o')
+        (volatile-aset! this 1 o')
         o'
     ))
 )
@@ -426,7 +419,7 @@
 ))
 )
 
-(about #_"beagle.IObject"
+(about #_"equivalence"
 
 (declare Symbol''equals)
 (declare Cons''equals)
@@ -437,13 +430,20 @@
         (identical? x y)                  true
         (nil? x)                          false
         (and (-/number? x) (-/number? y)) (-/== x y)
+        (and (-/char? x) (-/char? y))     (-/== (-/int x) (-/int y))
         (symbol? x)                       (Symbol''equals x, y)
         (symbol? y)                       (Symbol''equals y, x)
         (cons? x)                         (Cons''equals x, y)
         (cons? y)                         (Cons''equals y, x)
       #_(array-map? x)                  #_(ArrayMap''equals x, y)
       #_(array-map? y)                  #_(ArrayMap''equals y, x)
-        :else                             (-/Object''equals x, y)
+        (-/string? x)                     (String''equals x, y)
+        (-/string? y)                     (String''equals y, x)
+        (-/-symbol? x)                    (and (-/-symbol? y) (String''equals (-/str x), (-/str y)))
+        (-/-symbol? y)                    (and (-/-symbol? x) (String''equals (-/str y), (-/str x)))
+        (-/keyword? x)                    (and (-/keyword? y) (String''equals (-/str x), (-/str y)))
+        (-/keyword? y)                    (and (-/keyword? x) (String''equals (-/str y), (-/str x)))
+        :else                             (-/throw! (-/str "= not supported on " x ", not even on " y))
     )
 ))
 
