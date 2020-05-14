@@ -13,7 +13,7 @@
     [java.lang Appendable Character Error Integer Long Number String StringBuilder System]
     [java.io Flushable PrintWriter PushbackReader Reader]
     [java.util.regex Matcher Pattern]
-    [clojure.lang Counted IFn ISeq Namespace Seqable Var]
+    [clojure.lang IFn ISeq Namespace Seqable Var]
 )
 
 (-/defmacro refer! [ns s]
@@ -30,10 +30,6 @@
 
 (defn char? [x] (instance? Character x))
 
-(defn #_"int"       Character'digit        [#_"char" ch, #_"int" radix] (Character/digit ch, radix))
-(defn #_"boolean"   Character'isWhitespace [#_"char" ch]                (Character/isWhitespace ch))
-(defn #_"Character" Character'valueOf      [#_"char" ch]                (Character/valueOf ch))
-
 (defn int? [x] (or (instance? Integer x) (instance? Long x)))
 
 (defn #_"int" Integer'parseInt [#_"String" s] (Integer/parseInt s))
@@ -48,7 +44,7 @@
 
 (defn #_"char"    String''charAt     [^String this, #_"int" i]    (.charAt this, i))
 (defn #_"boolean" String''equals     [^String this, #_"any" that] (.equals this, that))
-(defn #_"int"     String''indexOf   ([^String this, #_"int" ch]   (.indexOf this, ch))     ([^String this, #_"String" s, #_"int" from] (.indexOf this, s, from)))
+(defn #_"int"     String''indexOf   ([^String this, #_"int" c]    (.indexOf this, c))      ([^String this, #_"String" s, #_"int" from] (.indexOf this, s, from)))
 (defn #_"int"     String''length     [^String this]               (.length this))
 (defn #_"String"  String''substring ([^String this, #_"int" from] (.substring this, from)) ([^String this, #_"int" from, #_"int" over] (.substring this, from, over)))
 
@@ -63,10 +59,6 @@
 (def System'out *out*)
 
 (defn array? [x] (and (some? x) (.isArray (class x))))
-
-(defn clojure-counted? [x] (instance? clojure.lang.Counted x))
-
-(defn #_"int" Counted''count [^Counted this] (.count this))
 
 (defn #_"void" Flushable''flush [^Flushable this] (.flush this))
 
@@ -113,7 +105,7 @@
 
 (-/import!)
 
-(-/refer! beagle.bore [-> -seq -seq? -symbol -symbol? < <= == A'clone A'get A'length A'new A'set Appendable''append Character'digit Character'isWhitespace Character'valueOf Counted''count Flushable''flush IFn''applyTo ISeq''first ISeq''next Integer'parseInt Matcher''matches Namespace''findInternedVar Number''toString Pattern''matcher Pattern'compile PushbackReader''unread Reader''read Seqable''seq String''charAt String''equals String''indexOf String''length String''substring StringBuilder''append StringBuilder''toString StringBuilder'new System'arraycopy System'in System'out Var''-get and array? bit-and bit-shift-left bit-shift-right char char? clojure-counted? clojure-fn? clojure-seqable? cond cons count declare identical? instance? int int! keyword? list map? name namespace number? or str string? the-ns throw! unchecked-add-int unchecked-dec-int unchecked-inc-int unchecked-subtract-int var? when])
+(-/refer! beagle.bore [-> -seq -seq? -symbol -symbol? < <= == A'clone A'get A'length A'new A'set Appendable''append Flushable''flush IFn''applyTo ISeq''first ISeq''next Integer'parseInt Matcher''matches Namespace''findInternedVar Number''toString Pattern''matcher Pattern'compile PushbackReader''unread Reader''read Seqable''seq String''charAt String''equals String''indexOf String''length String''substring StringBuilder''append StringBuilder''toString StringBuilder'new System'arraycopy System'in System'out Var''-get and array? bit-and bit-shift-left bit-shift-right char char? clojure-fn? clojure-seqable? cond cons count declare identical? instance? int int! keyword? list map? name namespace number? or str string? the-ns throw! unchecked-add-int unchecked-dec-int unchecked-inc-int unchecked-subtract-int var? when])
 
 (-/defmacro about [& s] (-/cons 'do s))
 
@@ -140,7 +132,6 @@
         (cond
             (nil? x)               nil
             (cons? x)              (Cons''seq x)
-          #_(array-map? x)       #_nil
             (-/string? x)          (-/-seq x)
             (-/clojure-seqable? x) (-/Seqable''seq x)
             :else                  (-/throw! (str "seq not supported on " x))
@@ -185,19 +176,15 @@
 
 (about #_"beagle.Counted"
     (declare Cons''count)
-    (declare array-map?)
-    (declare ArrayMap''count)
     (declare inc)
 
     (def count (λ [x]
         (cond
-            (nil? x)               0
-            (cons? x)              (Cons''count x)
-            (array-map? x)         (ArrayMap''count x)
-            (-/string? x)          (-/String''length x)
-            (-/clojure-counted? x) (-/Counted''count x)
-            (seqable? x)           (loop [n 0 s (seq x)] (if (some? s) (recur (inc n) (next s)) n))
-            :else                  (-/throw! (str "count not supported on " x))
+            (nil? x)      0
+            (cons? x)     (Cons''count x)
+            (-/string? x) (-/String''length x)
+            (seqable? x)  (loop [n 0 s (seq x)] (if (some? s) (recur (inc n) (next s)) n))
+            :else         (-/throw! (str "count not supported on " x))
         )
     ))
 )
@@ -217,27 +204,38 @@
     (def volatile-aset! (λ [a i x]   (aset! a i x)))
 )
 
+(about #_"unicode"
+    (def Unicode'newline     10)
+    (def Unicode'space       32)
+    (def Unicode'quotation   34)
+    (def Unicode'hash        35)
+    (def Unicode'apostrophe  39)
+    (def Unicode'lparen      40)
+    (def Unicode'rparen      41)
+    (def Unicode'plus        43)
+    (def Unicode'comma       44)
+    (def Unicode'minus       45)
+    (def Unicode'slash       47)
+    (def Unicode'0           48)
+    (def Unicode'9           57)
+    (def Unicode'colon       58)
+    (def Unicode'lbracket    91)
+    (def Unicode'backslash   92)
+    (def Unicode'rbracket    93)
+    (def Unicode'underscore  95)
+    (def Unicode'grave       96)
+    (def Unicode'n          110)
+)
+
 (about #_"append, str, pr, prn"
     (declare =)
 
-    (def #_"char|String" escape-chr (λ [#_"char" c]
-        (cond
-            (= c \newline) "newline"
-            (= c \space)   "space"
-            :else          c
-        )
-    ))
-
-    (def #_"Appendable" append-chr (λ [#_"Appendable" a, #_"char" x]
-        (-/Appendable''append (-/Appendable''append a "\\") (escape-chr x))
-    ))
-
     (def #_"char|String" escape-str (λ [#_"char" c]
         (cond
-            (= c \newline) "\\n"
-            (= c \")       "\\\""
-            (= c \\)       "\\\\"
-            :else          c
+            (= (-/int c) Unicode'newline)   "\\n"
+            (= (-/int c) Unicode'quotation) "\\\""
+            (= (-/int c) Unicode'backslash) "\\\\"
+            :else                           c
         )
     ))
 
@@ -290,24 +288,21 @@
     (declare append)
 
     (def #_"Appendable" append-seq (λ [#_"Appendable" a, #_"seq" x] (append* a "(" append " " ")" x)))
-    (def #_"Appendable" append-map (λ [#_"Appendable" a, #_"map" x] (append* a "{" (λ [a e] (append (-/Appendable''append (append a (first e)) " ") (second e))) ", " "}" x)))
 
     (declare symbol?)
     (declare atom?)
 
     (def #_"Appendable" append (λ [#_"Appendable" a, #_"any" x]
         (cond
-            (= x nil)        (-/Appendable''append a, "nil")
-            (= x false)      (-/Appendable''append a, "false")
-            (= x true)       (-/Appendable''append a, "true")
-            (-/number? x)    (-/Appendable''append a, (-/Number''toString x))
-            (-/char? x)      (append-chr a x)
-            (-/string? x)    (append-str a x)
-            (symbol? x)      (append-sym a x)
-            (cons? x)        (append-seq a x)
-          #_(array-map? x) #_(append-map a x)
-            (atom? x)        (-/Appendable''append a, "atom")
-            :else            (-/Appendable''append a, "object")
+            (= x nil)     (-/Appendable''append a, "nil")
+            (= x false)   (-/Appendable''append a, "false")
+            (= x true)    (-/Appendable''append a, "true")
+            (-/number? x) (-/Appendable''append a, (-/Number''toString x))
+            (-/string? x) (append-str a x)
+            (symbol? x)   (append-sym a x)
+            (cons? x)     (append-seq a x)
+            (atom? x)     (-/Appendable''append a, "atom")
+            :else         (-/Appendable''append a, "object")
         )
     ))
 
@@ -326,9 +321,9 @@
         )
     ))
 
-    (def space   (λ [] (-/Appendable''append -/System'out \space)   nil))
-    (def newline (λ [] (-/Appendable''append -/System'out \newline) nil))
-    (def flush   (λ [] (-/Flushable''flush   -/System'out)          nil))
+    (def space   (λ [] (-/Appendable''append -/System'out (-/char Unicode'space))   nil))
+    (def newline (λ [] (-/Appendable''append -/System'out (-/char Unicode'newline)) nil))
+    (def flush   (λ [] (-/Flushable''flush   -/System'out)                          nil))
 
     (def pr (λ [& s]
         (when (some? s)
@@ -423,27 +418,21 @@
 
 (declare Symbol''equals)
 (declare Cons''equals)
-(declare ArrayMap''equals)
 
 (def = (λ [x y]
     (cond
-        (identical? x y)                  true
-        (nil? x)                          false
-        (and (-/number? x) (-/number? y)) (-/== x y)
-        (and (-/char? x) (-/char? y))     (-/== (-/int x) (-/int y))
-        (symbol? x)                       (Symbol''equals x, y)
-        (symbol? y)                       (Symbol''equals y, x)
-        (cons? x)                         (Cons''equals x, y)
-        (cons? y)                         (Cons''equals y, x)
-      #_(array-map? x)                  #_(ArrayMap''equals x, y)
-      #_(array-map? y)                  #_(ArrayMap''equals y, x)
-        (-/string? x)                     (String''equals x, y)
-        (-/string? y)                     (String''equals y, x)
-        (-/-symbol? x)                    (and (-/-symbol? y) (String''equals (-/str x), (-/str y)))
-        (-/-symbol? y)                    (and (-/-symbol? x) (String''equals (-/str y), (-/str x)))
-        (-/keyword? x)                    (and (-/keyword? y) (String''equals (-/str x), (-/str y)))
-        (-/keyword? y)                    (and (-/keyword? x) (String''equals (-/str y), (-/str x)))
-        :else                             (-/throw! (-/str "= not supported on " x ", not even on " y))
+        (identical? x y) true
+        (nil? x)         false
+        (-/number? x)    (and (-/number? y) (-/== x y))
+        (-/char? x)      (and (-/char? y) (-/== (-/int x) (-/int y)))
+        (symbol? x)      (Symbol''equals x, y)
+        (symbol? y)      (Symbol''equals y, x)
+        (cons? x)        (Cons''equals x, y)
+        (cons? y)        (Cons''equals y, x)
+        (-/string? x)    (String''equals x, y)
+        (-/-symbol? x)   (and (-/-symbol? y) (String''equals (-/str x), (-/str y)))
+        (-/keyword? x)   (and (-/keyword? y) (String''equals (-/str x), (-/str y)))
+        :else            (-/throw! (-/str "= not supported on " x ", not even on " y))
     )
 ))
 
@@ -491,7 +480,7 @@
     (def #_"String" Symbol''name (λ [#_"Symbol" this] (when (symbol? this) (aget this 2))))
 
     (def #_"Symbol" Symbol'intern (λ [#_"String" nsname]
-        (let [#_"int" i (-/String''indexOf nsname, (-/int \/))]
+        (let [#_"int" i (-/String''indexOf nsname, Unicode'slash)]
             (if (or (= i -1) (= nsname "/"))
                 (Symbol'new nil, nsname)
                 (Symbol'new (-/String''substring nsname, 0, i), (-/String''substring nsname, (inc i)))
@@ -620,10 +609,6 @@
         (if (and (some? a) (pos? (alength a))) (ArrayMap'new a) ArrayMap'EMPTY)
     ))
 
-    (def #_"int" ArrayMap''count (λ [#_"ArrayMap" this]
-        (>> (alength (ArrayMap''array this)) 1)
-    ))
-
     (def #_"int" ArrayMap'index-of (λ [#_"array" a, #_"key" key]
         (loop [#_"int" i 0]
             (if (< i (alength a))
@@ -665,25 +650,6 @@
 
     (def #_"boolean" ArrayMap''containsKey (λ [#_"ArrayMap" this, #_"key" key]
         (< -1 (ArrayMap'index-of (ArrayMap''array this), key))
-    ))
-
-    (declare contains?)
-    (declare get)
-
-    (def #_"boolean" ArrayMap''equals (λ [#_"ArrayMap" this, #_"any" that]
-        (or (identical? this that)
-            (and (or (array-map? that) (-/map? that)) (= (count that) (count this))
-                (loop [#_"seq" s (seq this)]
-                    (or (nil? s)
-                        (let [#_"pair" e (first s) #_"key" k (first e)]
-                            (and (contains? that k) (= (second e) (get that k))
-                                (recur (next s))
-                            )
-                        )
-                    )
-                )
-            )
-        )
     ))
 )
 
@@ -1318,7 +1284,7 @@
     (def #_"Expr" Compiler'analyzeSymbol (λ [#_"Symbol" sym, #_"map" scope]
         (let [sym (symbol! sym)]
             (or
-                (when (= (-/String''charAt (Symbol''name sym), 0) \:)
+                (when (= (-/int (-/String''charAt (Symbol''name sym), 0)) Unicode'colon)
                     (LiteralExpr'new sym)
                 )
                 (when (nil? (Symbol''ns sym))
@@ -1417,33 +1383,35 @@
 (about #_"LispReader"
     (declare LispReader'macros)
 
-    (def #_"boolean" LispReader'isMacro (λ [#_"char" ch]
-        (contains? LispReader'macros ch)
+    (def #_"boolean" LispReader'isMacro (λ [#_"unicode" c]
+        (contains? LispReader'macros c)
     ))
 
-    (def #_"boolean" LispReader'isTerminatingMacro (λ [#_"char" ch]
-        (and (LispReader'isMacro ch) (not= ch \#) (not= ch \'))
+    (def #_"boolean" LispReader'isTerminatingMacro (λ [#_"unicode" c]
+        (and (LispReader'isMacro c) (not= c Unicode'hash) (not= c Unicode'apostrophe))
     ))
 
-    (def #_"boolean" LispReader'isDigit (λ [#_"char" ch, #_"int" base]
-        (not= (-/Character'digit ch, base) -1)
+    (def #_"boolean" LispReader'isDigit (λ [#_"unicode" c]
+        (and (<= Unicode'0 c) (<= c Unicode'9))
     ))
 
-    (def #_"boolean" LispReader'isWhitespace (λ [#_"char" ch]
-        (or (-/Character'isWhitespace ch) (= ch \,))
+    (def #_"unicode" LispReader'naught 31)
+
+    (def #_"boolean" LispReader'isWhitespace (λ [#_"unicode" c]
+        (or (= c Unicode'space) (= c Unicode'comma) (= c Unicode'newline) (= c LispReader'naught))
     ))
 
-    (def #_"Character" LispReader'read1 (λ [#_"Reader" r]
-        (let [#_"int" c (-/Reader''read r)]
+    (def #_"Unicode" LispReader'read1 (λ [#_"Reader" r]
+        (let [#_"unicode" c (-/Reader''read r)]
             (when (not= c -1)
-                (-/char c)
+                c
             )
         )
     ))
 
-    (def #_"void" LispReader'unread (λ [#_"PushbackReader" r, #_"Character" ch]
-        (when (some? ch)
-            (-/PushbackReader''unread r, (-/int ch))
+    (def #_"void" LispReader'unread (λ [#_"PushbackReader" r, #_"Unicode" c]
+        (when (some? c)
+            (-/PushbackReader''unread r, c)
         )
         nil
     ))
@@ -1458,18 +1426,18 @@
         )
     ))
 
-    (def #_"number" LispReader'readNumber (λ [#_"PushbackReader" r, #_"char" ch]
+    (def #_"number" LispReader'readNumber (λ [#_"PushbackReader" r, #_"unicode" c]
         (let [#_"String" s
-                (let [#_"StringBuilder" sb (-/StringBuilder'new) _ (-/StringBuilder''append sb, ch)]
+                (let [#_"StringBuilder" sb (-/StringBuilder'new) _ (-/StringBuilder''append sb, (-/char c))]
                     (loop []
-                        (let [ch (LispReader'read1 r)]
-                            (if (or (nil? ch) (LispReader'isWhitespace ch) (LispReader'isMacro ch))
+                        (let [c (LispReader'read1 r)]
+                            (if (or (nil? c) (LispReader'isWhitespace c) (LispReader'isMacro c))
                                 (do
-                                    (LispReader'unread r, ch)
+                                    (LispReader'unread r, c)
                                     (-/StringBuilder''toString sb)
                                 )
                                 (do
-                                    (-/StringBuilder''append sb, ch)
+                                    (-/StringBuilder''append sb, (-/char c))
                                     (recur)
                                 )
                             )
@@ -1480,17 +1448,17 @@
         )
     ))
 
-    (def #_"String" LispReader'readToken (λ [#_"PushbackReader" r, #_"char" ch]
-        (let [#_"StringBuilder" sb (-/StringBuilder'new) _ (-/StringBuilder''append sb, ch)]
+    (def #_"String" LispReader'readToken (λ [#_"PushbackReader" r, #_"unicode" c]
+        (let [#_"StringBuilder" sb (-/StringBuilder'new) _ (-/StringBuilder''append sb, (-/char c))]
             (loop []
-                (let [ch (LispReader'read1 r)]
-                    (if (or (nil? ch) (LispReader'isWhitespace ch) (LispReader'isTerminatingMacro ch))
+                (let [c (LispReader'read1 r)]
+                    (if (or (nil? c) (LispReader'isWhitespace c) (LispReader'isTerminatingMacro c))
                         (do
-                            (LispReader'unread r, ch)
+                            (LispReader'unread r, c)
                             (-/StringBuilder''toString sb)
                         )
                         (do
-                            (-/StringBuilder''append sb, ch)
+                            (-/StringBuilder''append sb, (-/char c))
                             (recur)
                         )
                     )
@@ -1498,6 +1466,8 @@
             )
         )
     ))
+
+    #_"\n !\"#%&'()*+,-./0123479:;<=>?@ABCDEFGHIKLMNOPRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ζλ"
 
     (def #_"Pattern" LispReader'rxSymbol (-/Pattern'compile "(?:-/)?[-+:a-zA-Z_*?!<=>&%λζ][-+:a-zA-Z_*?!<=>&%0-9'#]*"))
 
@@ -1515,31 +1485,31 @@
         )
     ))
 
-    (def #_"any" LispReader'read (λ [#_"PushbackReader" r, #_"map" scope, #_"Character" delim, #_"any" delim!]
+    (def #_"any" LispReader'read (λ [#_"PushbackReader" r, #_"map" scope, #_"Unicode" delim, #_"any" delim!]
         (loop []
-            (let [#_"char" ch (loop [ch (LispReader'read1 r)] (if (and (some? ch) (LispReader'isWhitespace ch)) (recur (LispReader'read1 r)) ch))]
+            (let [#_"Unicode" c (loop [c (LispReader'read1 r)] (if (and (some? c) (LispReader'isWhitespace c)) (recur (LispReader'read1 r)) c))]
                 (cond
-                    (nil? ch)
+                    (nil? c)
                         (-/throw! "EOF while reading")
-                    (and (some? delim) (= delim ch))
+                    (and (some? delim) (= delim c))
                         delim!
-                    (LispReader'isDigit ch, 10)
-                        (LispReader'readNumber r, ch)
+                    (LispReader'isDigit c)
+                        (LispReader'readNumber r, c)
                     :else
-                        (let [#_"fn" f'macro (get LispReader'macros ch)]
+                        (let [#_"fn" f'macro (get LispReader'macros c)]
                             (if (some? f'macro)
-                                (let [#_"any" o (f'macro r scope ch)]
+                                (let [#_"any" o (f'macro r scope c)]
                                     (if (identical? o r) (recur) o)
                                 )
                                 (or
-                                    (when (or (= ch \+) (= ch \-))
-                                        (let [#_"char" ch' (LispReader'read1 r) _ (LispReader'unread r, ch')]
-                                            (when (and (some? ch') (LispReader'isDigit ch', 10))
-                                                (LispReader'readNumber r, ch)
+                                    (when (or (= c Unicode'plus) (= c Unicode'minus))
+                                        (let [#_"Unicode" c' (LispReader'read1 r) _ (LispReader'unread r, c')]
+                                            (when (and (some? c') (LispReader'isDigit c'))
+                                                (LispReader'readNumber r, c)
                                             )
                                         )
                                     )
-                                    (LispReader'interpretToken (LispReader'readToken r, ch))
+                                    (LispReader'interpretToken (LispReader'readToken r, c))
                                 )
                             )
                         )
@@ -1550,7 +1520,7 @@
 
     (def #_"any" LispReader'READ_FINISHED (anew 0))
 
-    (def #_"seq" LispReader'readDelimitedForms (λ [#_"PushbackReader" r, #_"map" scope, #_"char" delim]
+    (def #_"seq" LispReader'readDelimitedForms (λ [#_"PushbackReader" r, #_"map" scope, #_"unicode" delim]
         (loop [#_"seq" z nil]
             (let [#_"any" form (LispReader'read r, scope, delim, LispReader'READ_FINISHED)]
                 (if (identical? form LispReader'READ_FINISHED)
@@ -1561,28 +1531,28 @@
         )
     ))
 
-    (def #_"char" StringReader'escape (λ [#_"PushbackReader" r]
-        (let [#_"char" ch (LispReader'read1 r)]
-            (if (some? ch)
+    (def #_"unicode" StringReader'escape (λ [#_"PushbackReader" r]
+        (let [#_"Unicode" c (LispReader'read1 r)]
+            (if (some? c)
                 (cond
-                    (= ch \n) \newline
-                    (= ch \\) ch
-                    (= ch \") ch #_"\""
-                    :else (-/throw! (str "unsupported escape character: \\" ch))
+                    (= c Unicode'n)         Unicode'newline
+                    (= c Unicode'backslash) c
+                    (= c Unicode'quotation) c
+                    :else (-/throw! (str "unsupported escape character: \\" (-/char c)))
                 )
                 (-/throw! "EOF while reading string")
             )
         )
     ))
 
-    (def #_"any" string-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"char" _delim]
+    (def #_"any" string-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"unicode" _delim]
         (let [#_"StringBuilder" sb (-/StringBuilder'new)]
             (loop []
-                (let [#_"char" ch (LispReader'read1 r)]
-                    (if (some? ch)
-                        (when (not= ch \") #_"\""
+                (let [#_"Unicode" c (LispReader'read1 r)]
+                    (if (some? c)
+                        (when (not= c Unicode'quotation)
                             (do
-                                (-/StringBuilder''append sb, (if (= ch \\) (StringReader'escape r) ch))
+                                (-/StringBuilder''append sb, (-/char (if (= c Unicode'backslash) (StringReader'escape r) c)))
                                 (recur)
                             )
                         )
@@ -1594,26 +1564,26 @@
         )
     ))
 
-    (def #_"any" discard-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"char" _delim]
+    (def #_"any" discard-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"unicode" _delim]
         (LispReader'read r, scope, nil, nil)
         r
     ))
 
-    (def #_"any" quote-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"char" _delim]
+    (def #_"any" quote-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"unicode" _delim]
         (list (symbol! 'quote) (LispReader'read r, scope, nil, nil))
     ))
 
     (declare LispReader'dispatchMacros)
 
-    (def #_"any" dispatch-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"char" _delim]
-        (let [#_"char" ch (LispReader'read1 r)]
-            (if (some? ch)
-                (let [#_"fn" f'macro (get LispReader'dispatchMacros ch)]
+    (def #_"any" dispatch-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"unicode" _delim]
+        (let [#_"Unicode" c (LispReader'read1 r)]
+            (if (some? c)
+                (let [#_"fn" f'macro (get LispReader'dispatchMacros c)]
                     (if (some? f'macro)
-                        (f'macro r scope ch)
+                        (f'macro r scope c)
                         (do
-                            (LispReader'unread r, ch)
-                            (-/throw! (str "no dispatch macro for: " ch))
+                            (LispReader'unread r, c)
+                            (-/throw! (str "no dispatch macro for: " (-/char c)))
                         )
                     )
                 )
@@ -1622,50 +1592,31 @@
         )
     ))
 
-    (def #_"any" character-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"char" _delim]
-        (let [#_"char" ch (LispReader'read1 r)]
-            (if (some? ch)
-                (let [#_"String" token (LispReader'readToken r, ch)]
-                    (if (= (-/String''length token) 1)
-                        (-/Character'valueOf (-/String''charAt token, 0))
-                        (cond
-                            (= token "newline") \newline
-                            (= token "space")   \space
-                            :else (-/throw! (str "unsupported character: \\" token))
-                        )
-                    )
-                )
-                (-/throw! "EOF while reading character")
-            )
-        )
+    (def #_"any" list-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"unicode" _delim]
+        (apply list (LispReader'readDelimitedForms r, scope, Unicode'rparen))
     ))
 
-    (def #_"any" list-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"char" _delim]
-        (apply list (LispReader'readDelimitedForms r, scope, \)))
+    (def #_"any" vector-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"unicode" _delim]
+        (apply list (LispReader'readDelimitedForms r, scope, Unicode'rbracket))
     ))
 
-    (def #_"any" vector-reader (λ [#_"PushbackReader" r, #_"map" scope, #_"char" _delim]
-        (apply list (LispReader'readDelimitedForms r, scope, \]))
+    (def #_"any" unmatched-delimiter-reader (λ [#_"PushbackReader" _r, #_"map" scope, #_"unicode" delim]
+        (-/throw! (str "unmatched delimiter: " (-/char delim)))
     ))
 
-    (def #_"any" unmatched-delimiter-reader (λ [#_"PushbackReader" _r, #_"map" scope, #_"char" delim]
-        (-/throw! (str "unmatched delimiter: " delim))
-    ))
-
-    (def #_"{char fn}" LispReader'macros
+    (def #_"{unicode fn}" LispReader'macros
         (array-map
-            \"  string-reader #_"\""
-            \'  quote-reader        \`  quote-reader
-            \(  list-reader         \)  unmatched-delimiter-reader
-            \[  vector-reader       \]  unmatched-delimiter-reader
-            \\  character-reader
-            \#  dispatch-reader
+            Unicode'quotation   string-reader
+            Unicode'apostrophe  quote-reader        Unicode'grave     quote-reader
+            Unicode'lparen      list-reader         Unicode'rparen    unmatched-delimiter-reader
+            Unicode'lbracket    vector-reader       Unicode'rbracket  unmatched-delimiter-reader
+            Unicode'hash        dispatch-reader
         )
     )
 
-    (def #_"{char fn}" LispReader'dispatchMacros
+    (def #_"{unicode fn}" LispReader'dispatchMacros
         (array-map
-            \_  discard-reader
+            Unicode'underscore  discard-reader
         )
     )
 )
