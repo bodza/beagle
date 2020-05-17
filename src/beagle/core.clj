@@ -3,7 +3,7 @@
 )
 
 (ns beagle.bore
-    (:refer-clojure :only [*in* *ns* *out* aget alength aset class defn doseq fn import keys let map merge meta ns-imports ns-resolve ns-unmap object-array select-keys seq seq? some? symbol symbol? var-get vary-meta])
+    (:refer-clojure :only [*in* *ns* *out* aget alength aset class defn doseq fn fn? import keys let map merge meta ns-imports ns-resolve ns-unmap object-array select-keys seq seq? some? symbol symbol? var-get vary-meta])
     (:require [clojure.core :as -])
 )
 
@@ -69,11 +69,9 @@
 
 (defn #_"boolean" Matcher''matches [^Matcher this] (.matches this))
 
-(defn clojure-fn? [x] (instance? clojure.lang.IFn x))
-
 (defn #_"any" IFn''applyTo [^IFn this, #_"seq" args] (.applyTo this, args))
 
-(defn clojure-seqable? [x] (instance? clojure.lang.Seqable x))
+(defn -seqable? [x] (instance? clojure.lang.Seqable x))
 
 (defn #_"seq" Seqable''seq [^Seqable this] (.seq this))
 
@@ -90,6 +88,7 @@
 (defn A'length [^"[Ljava.lang.Object;" a]     (alength a))
 (defn A'set    [^"[Ljava.lang.Object;" a i x] (aset a i x))
 
+(def -fn?     fn?)
 (def -seq     seq)
 (def -seq?    seq?)
 (def -symbol  symbol)
@@ -102,7 +101,7 @@
 
 (-/import!)
 
-(-/refer! beagle.bore [-> -seq -seq? -symbol -symbol? < <= == A'get A'length A'new A'set Appendable''append Flushable''flush IFn''applyTo ISeq''first ISeq''next Integer'parseInt Matcher''matches Namespace''findInternedVar Number''toString Pattern''matcher Pattern'compile PushbackReader''unread Reader''read Seqable''seq String''charAt String''equals String''indexOf String''length String''substring StringBuilder''append StringBuilder''toString StringBuilder'new System'in System'out Var''-get and array? bit-and bit-shift-left bit-shift-right char char? clojure-fn? clojure-seqable? cond cons count declare identical? instance? int int! keyword? list map? name namespace number? or str string? the-ns throw! unchecked-add-int unchecked-dec-int unchecked-inc-int unchecked-subtract-int var? when])
+(-/refer! beagle.bore [-> -fn? -seq -seq? -seqable? -symbol -symbol? < <= == A'get A'length A'new A'set Appendable''append Flushable''flush IFn''applyTo ISeq''first ISeq''next Integer'parseInt Matcher''matches Namespace''findInternedVar Number''toString Pattern''matcher Pattern'compile PushbackReader''unread Reader''read Seqable''seq String''charAt String''equals String''indexOf String''length String''substring StringBuilder''append StringBuilder''toString StringBuilder'new System'in System'out Var''-get and array? bit-and bit-shift-left bit-shift-right char char? cond cons count declare identical? instance? int int! keyword? list map? name namespace number? or str string? the-ns throw! unchecked-add-int unchecked-dec-int unchecked-inc-int unchecked-subtract-int var? when])
 
 (-/defmacro about [& s] (-/cons 'do s))
 
@@ -119,50 +118,40 @@
 
 (about #_"beagle.Seqable"
     (declare cons?)
-    (declare cons-map?)
-
-    (def seqable? (λ [x] (or (nil? x) (cons? x) (cons-map? x) (-/string? x) (-/clojure-seqable? x))))
-
     (declare Cons''seq)
-    (declare ConsMap''seq)
     (declare str)
 
     (def seq (λ [x]
         (cond
-            (nil? x)               nil
-            (cons? x)              (Cons''seq x)
-            (cons-map? x)          (ConsMap''seq x)
-            (-/string? x)          (-/-seq x)
-            (-/clojure-seqable? x) (-/Seqable''seq x)
-            :else                  (-/throw! (str "seq not supported on " x))
+            (nil? x)        nil
+            (cons? x)       (Cons''seq x)
+            (-/string? x)   (-/-seq x)
+            (-/-seqable? x) (-/Seqable''seq x)
+            :else           (-/throw! (str "seq not supported on " x))
         )
     ))
 )
 
 (about #_"beagle.ISeq"
-    (def seq? (λ [x] (or (cons? x) (cons-map? x) (-/-seq? x))))
+    (def seq? (λ [x] (or (cons? x) (-/-seq? x))))
 
     (declare Cons''first)
-    (declare ConsMap''first)
 
     (def Seq''first (λ [s]
         (cond
-            (cons? s)     (Cons''first s)
-            (cons-map? s) (ConsMap''first s)
-            (-/-seq? s)   (-/ISeq''first s)
-            :else         (-/throw! (str "first not supported on " s))
+            (cons? s)   (Cons''first s)
+            (-/-seq? s) (-/ISeq''first s)
+            :else       (-/throw! (str "first not supported on " s))
         )
     ))
 
     (declare Cons''next)
-    (declare ConsMap''next)
 
     (def Seq''next  (λ [s]
         (cond
-            (cons? s)     (Cons''next s)
-            (cons-map? s) (ConsMap''next s)
-            (-/-seq? s)   (-/ISeq''next s)
-            :else         (-/throw! (str "next not supported on " s))
+            (cons? s)   (Cons''next s)
+            (-/-seq? s) (-/ISeq''next s)
+            :else       (-/throw! (str "next not supported on " s))
         )
     ))
 
@@ -180,17 +169,15 @@
 
 (about #_"beagle.Counted"
     (declare Cons''count)
-    (declare ConsMap''count)
     (declare inc)
 
     (def count (λ [x]
         (cond
-            (nil? x)      0
-            (cons? x)     (Cons''count x)
-            (cons-map? x) (ConsMap''count x)
-            (-/string? x) (-/String''length x)
-            (seqable? x)  (loop [n 0 s (seq x)] (if (some? s) (recur (inc n) (next s)) n))
-            :else         (-/throw! (str "count not supported on " x))
+            (nil? x)        0
+            (cons? x)       (Cons''count x)
+            (-/string? x)   (-/String''length x)
+            (-/-seqable? x) (loop [n 0 s (seq x)] (if (some? s) (recur (inc n) (next s)) n))
+            :else           (-/throw! (str "count not supported on " x))
         )
     ))
 )
@@ -252,19 +239,18 @@
         )
     ))
 
-    (declare Symbol''ns)
-    (declare Symbol''name)
+    (declare get)
 
     (def #_"Appendable" append-sym (λ [#_"Appendable" a, #_"Symbol" x]
-        (if (some? (Symbol''ns x))
+        (if (some? (get x :ns))
             (let [
-                a (-/Appendable''append a, (Symbol''ns x))
+                a (-/Appendable''append a, (get x :ns))
                 a (-/Appendable''append a, "/")
-                a (-/Appendable''append a, (Symbol''name x))
+                a (-/Appendable''append a, (get x :name))
             ]
                 a
             )
-            (-/Appendable''append a, (Symbol''name x))
+            (-/Appendable''append a, (get x :name))
         )
     ))
 
@@ -289,11 +275,8 @@
     ))
 
     (declare append)
-    (declare ConsMap''key)
-    (declare ConsMap''val)
 
     (def #_"Appendable" append-seq (λ [#_"Appendable" a, #_"seq" x] (append* a "(" append " " ")" x)))
-    (def #_"Appendable" append-map (λ [#_"Appendable" a, #_"map" x] (append* a "{" (λ [a e] (append (-/Appendable''append (append a (ConsMap''key e)) " ") (ConsMap''val e))) ", " "}" x)))
 
     (declare symbol?)
     (declare atom?)
@@ -307,7 +290,6 @@
             (-/string? x) (append-str a x)
             (symbol? x)   (append-sym a x)
             (cons? x)     (append-seq a x)
-            (cons-map? x) (append-map a x)
             (atom? x)     (-/Appendable''append a, "atom")
             :else         (-/Appendable''append a, "object")
         )
@@ -425,7 +407,6 @@
 
 (declare Symbol''equals)
 (declare Cons''equals)
-(declare ConsMap''equals)
 
 (def = (λ [x y]
     (cond
@@ -437,8 +418,6 @@
         (symbol? y)      (Symbol''equals y, x)
         (cons? x)        (Cons''equals x, y)
         (cons? y)        (Cons''equals y, x)
-        (cons-map? x)    (ConsMap''equals x, y)
-        (cons-map? y)    (ConsMap''equals y, x)
         (-/string? x)    (String''equals x, y)
         (-/-symbol? x)   (and (-/-symbol? y) (String''equals (-/str x), (-/str y)))
         (-/keyword? x)   (and (-/keyword? y) (String''equals (-/str x), (-/str y)))
@@ -475,47 +454,6 @@
 (def abs (λ [a] (if (neg? a) (- 0 a) a)))
 )
 
-(about #_"beagle.Symbol"
-
-(about #_"Symbol"
-    (def Symbol'meta (λ [] ))
-
-    (def #_"Symbol" Symbol'new (λ [#_"String" ns, #_"String" name]
-        (-> (anew 3) (aset! 0 Symbol'meta) (aset! 1 ns) (aset! 2 name))
-    ))
-
-    (def symbol? (λ [x] (and (-/array? x) (= (alength x) 3) (identical? (aget x 0) Symbol'meta))))
-
-    (def #_"String" Symbol''ns   (λ [#_"Symbol" this] (when (symbol? this) (aget this 1))))
-    (def #_"String" Symbol''name (λ [#_"Symbol" this] (when (symbol? this) (aget this 2))))
-
-    (def #_"Symbol" Symbol'intern (λ [#_"String" nsname]
-        (let [#_"int" i (-/String''indexOf nsname, Unicode'slash)]
-            (if (or (= i -1) (= nsname "/"))
-                (Symbol'new nil, nsname)
-                (Symbol'new (-/String''substring nsname, 0, i), (-/String''substring nsname, (inc i)))
-            )
-        )
-    ))
-
-    (def #_"boolean" Symbol''equals (λ [#_"Symbol" this, #_"any" that]
-        (or (identical? this that)
-            (and (or (symbol? that) (-/-symbol? that))
-                (= (Symbol''ns this) (if (-/-symbol? that) (-/namespace that) (Symbol''ns that)))
-                (= (Symbol''name this) (if (-/-symbol? that) (-/name that) (Symbol''name that)))
-            )
-            (and (-/keyword? that)
-                (= (Symbol''name this) (-/str that))
-            )
-        )
-    ))
-)
-
-(def symbol (λ [name] (if (or (symbol? name) (-/-symbol? name)) name (Symbol'intern name))))
-
-(def symbol! (λ [s] (symbol (if (-/-symbol? s) (str s) s))))
-)
-
 (about #_"beagle.Cons"
 
 (about #_"Cons"
@@ -545,7 +483,7 @@
 
     (def #_"boolean" Cons''equals (λ [#_"Cons" this, #_"any" that]
         (or (identical? this that)
-            (and (some? that) (seqable? that)
+            (and (or (cons? that) (-/-seqable? that))
                 (loop [#_"seq" s (seq this) #_"seq" z (seq that)]
                     (if (some? s)
                         (and (some? z) (= (first s) (first z)) (recur (next s) (next z)))
@@ -573,7 +511,31 @@
 
 (def reverse! (λ [s] (reduce (λ [%1 %2] (-/cons %2 %1)) (-/list) s)))
 
-(about #_"Cons"
+(def some (λ [f s]
+    (when (seq s)
+        (or (f (first s)) (#_recur some f (next s)))
+    )
+))
+)
+
+(about #_"beagle.ConsMap"
+
+(about #_"ConsMap"
+    (def #_"ConsMap" ConsMap'new (λ [#_"key" caar, #_"value" cadar, #_"seq" cdr]
+        (cons (cons caar (cons cadar nil)) cdr)
+    ))
+
+    (def #_"value" ConsMap''get (λ [#_"ConsMap" this, #_"key" key]
+        (some (λ [#_"Cons" e] (when (= (first e) key) (second e))) this)
+    ))
+
+    (def #_"ConsMap" ConsMap''assoc (λ [#_"ConsMap" this, #_"key" key, #_"value" val]
+        (if (let [#_"Cons" e (first this)] (and (#_= identical? (first e) key) (#_= identical? (second e) val)))
+            this
+            (ConsMap'new key, val, this)
+        )
+    ))
+
     (def #_"seq" Cons''keys (λ [#_"Cons" this]
         (loop [#_"seq" z nil #_"seq" s (seq this)]
             (if (some? s)
@@ -593,88 +555,67 @@
     ))
 )
 
-(def some (λ [f s]
-    (when (seq s)
-        (or (f (first s)) (#_recur some f (next s)))
-    )
-))
-)
-
-(about #_"beagle.ConsMap"
-
-(about #_"ConsMap"
-    (def ConsMap'meta (λ [] ))
-
-    (def #_"ConsMap" ConsMap'new (λ [#_"key" caar, #_"value" cadar, #_"seq" cdr]
-        (-> (anew 4) (aset! 0 ConsMap'meta) (aset! 1 caar) (aset! 2 cadar) (aset! 3 cdr))
-    ))
-
-    (def cons-map? (λ [x] (and (-/array? x) (= (alength x) 4) (identical? (aget x 0) ConsMap'meta))))
-
-    (def #_"key"   ConsMap''caar  (λ [#_"ConsMap" this] (when (cons-map? this) (aget this 1))))
-    (def #_"value" ConsMap''cadar (λ [#_"ConsMap" this] (when (cons-map? this) (aget this 2))))
-    (def #_"seq"   ConsMap''cdr   (λ [#_"ConsMap" this] (when (cons-map? this) (aget this 3))))
-
-    (def #_"ConsMap" ConsMap'nil (ConsMap'new nil, nil, nil))
-
-    (def #_"seq" ConsMap''seq (λ [#_"ConsMap" this]
-        (if (identical? this ConsMap'nil) nil this)
-    ))
-
-    (def #_"pair" ConsMap''first (λ [#_"ConsMap" this]                    this))
-    (def #_"seq"  ConsMap''next  (λ [#_"ConsMap" this] (seq (ConsMap''cdr this))))
-
-    (def #_"key"   ConsMap''key (λ [#_"ConsMap" this] (ConsMap''caar  this)))
-    (def #_"value" ConsMap''val (λ [#_"ConsMap" this] (ConsMap''cadar this)))
-
-    (def #_"int" ConsMap''count (λ [#_"ConsMap" this]
-        (if (identical? this ConsMap'nil) 0 (inc (count (ConsMap''cdr this))))
-    ))
-
-    (def #_"boolean" ConsMap''equals (λ [#_"ConsMap" this, #_"ConsMap?" that]
-        (or (identical? this that)
-            (and (cons-map? that)
-                (loop [#_"seq" s (seq this) #_"seq" z (seq that)]
-                    (if (some? s)
-                        (and (some? z) (= (ConsMap''key s) (ConsMap''key z)) (= (ConsMap''val s) (ConsMap''val z)) (recur (next s) (next z)))
-                        (nil? z)
-                    )
-                )
-            )
-        )
-    ))
-
-    (def #_"value" ConsMap''get (λ [#_"ConsMap" this, #_"key" key]
-        (some (λ [%] (when (= (ConsMap''key %) key) (ConsMap''val %))) this)
-    ))
-
-    (def #_"ConsMap" ConsMap''assoc (λ [#_"ConsMap" this, #_"key" key, #_"value" val]
-        (if (and (#_= identical? (ConsMap''key this) key) (#_= identical? (ConsMap''val this) val))
-            this
-            (ConsMap'new key, val, this)
-        )
-    ))
-)
-
 (def assoc (λ [m k v]
     (cond
-        (nil? m)      (ConsMap'new k, v, nil)
-        (cons-map? m) (ConsMap''assoc m, k, v)
-        :else         (-/throw! (str "assoc not supported on " m))
+        (nil? m)  (ConsMap'new k, v, nil)
+        (cons? m) (ConsMap''assoc m, k, v)
+        :else     (-/throw! (str "assoc not supported on " m))
     )
 ))
 
-(def cons-map (λ [& kvs] (if (some? kvs) (reduce-kv assoc ConsMap'nil kvs) ConsMap'nil)))
+(def cons-map (λ [& kvs] (if (some? kvs) (reduce-kv assoc Cons'nil kvs) Cons'nil)))
 
 (def get (λ [m k]
     (cond
-        (nil? m)      nil
-        (cons-map? m) (ConsMap''get m, k)
-        :else         (-/throw! (str "get not supported on " m))
+        (nil? m)  nil
+        (cons? m) (ConsMap''get m, k)
+        :else     (-/throw! (str "get not supported on " m))
     )
 ))
 
 (def update (λ [m k f & s] (assoc m k (apply f (get m k) s))))
+)
+
+(about #_"beagle.Symbol"
+
+(about #_"Symbol"
+    (def Symbol'meta (λ [] ))
+
+    (def #_"Symbol" Symbol'new (λ [#_"String" ns, #_"String" name]
+        (cons-map
+            #_"meta" :meta Symbol'meta
+            #_"String" :ns ns
+            #_"String" :name name
+        )
+    ))
+
+    (def symbol? (λ [x] (and (cons? x) (identical? (get x :meta) Symbol'meta))))
+
+    (def #_"Symbol" Symbol'intern (λ [#_"String" nsname]
+        (let [#_"int" i (-/String''indexOf nsname, Unicode'slash)]
+            (if (or (= i -1) (= nsname "/"))
+                (Symbol'new nil, nsname)
+                (Symbol'new (-/String''substring nsname, 0, i), (-/String''substring nsname, (inc i)))
+            )
+        )
+    ))
+
+    (def #_"boolean" Symbol''equals (λ [#_"Symbol" this, #_"any" that]
+        (or (identical? this that)
+            (and (or (symbol? that) (-/-symbol? that))
+                (= (get this :ns) (if (-/-symbol? that) (-/namespace that) (get that :ns)))
+                (= (get this :name) (if (-/-symbol? that) (-/name that) (get that :name)))
+            )
+            (and (-/keyword? that)
+                (= (get this :name) (-/str that))
+            )
+        )
+    ))
+)
+
+(def symbol (λ [name] (if (or (symbol? name) (-/-symbol? name)) name (Symbol'intern name))))
+
+(def symbol! (λ [s] (symbol (if (-/-symbol? s) (str s) s))))
 )
 
 (about #_"beagle.Var"
@@ -737,11 +678,8 @@
         )
     ))
 
-    (declare Binding''sym)
-    (declare Binding''idx)
-
     (def #_"gen" Compiler'emitLocal (λ [#_"map" scope, #_"gen" gen, #_"Binding" lb]
-        (Gen''get gen, (Binding''sym lb))
+        (Gen''get gen, (get lb :sym))
     ))
 
     (def #_"gen" Compiler'emitLocals (λ [#_"map" scope, #_"gen" gen, #_"Binding*" locals]
@@ -749,7 +687,7 @@
             (if (some? s)
                 (let [
                     #_"Binding" lb (first s)
-                    gen (Gen''push gen, (Binding''sym lb))
+                    gen (Gen''push gen, (get lb :sym))
                     gen (Compiler'emitLocal scope, gen, lb)
                     gen (Gen''assoc gen)
                 ]
@@ -767,20 +705,21 @@
     (def Closure'meta (λ [] ))
 
     (def #_"Closure" Closure'new (λ [#_"FnExpr" fun, #_"map" env]
-        (-> (anew 3) (aset! 0 Closure'meta) (aset! 1 fun) (aset! 2 env))
+        (cons-map
+            #_"meta" :meta Closure'meta
+            #_"FnExpr" :fun fun
+            #_"map" :env env
+        )
     ))
 
-    (def closure? (λ [x] (and (-/array? x) (= (alength x) 3) (identical? (aget x 0) Closure'meta))))
-
-    (def #_"FnExpr" Closure''fun (λ [#_"Closure" this] (when (closure? this) (aget this 1))))
-    (def #_"map"    Closure''env (λ [#_"Closure" this] (when (closure? this) (aget this 2))))
+    (def closure? (λ [x] (and (cons? x) (identical? (get x :meta) Closure'meta))))
 
     (declare Machine'compute)
     (declare FnExpr''compile)
 
     (def #_"any" Closure''applyTo (λ [#_"Closure" this, #_"seq" args]
         (let [
-            #_"FnExpr" fun (Closure''fun this) #_"int" n (get fun :arity)
+            #_"FnExpr" fun (get this :fun) #_"int" n (get fun :arity)
             _
                 (let [#_"int" m (count args)]
                     (when (< m (dec (- 0 n)))
@@ -789,13 +728,13 @@
                 )
             #_"map" env
                 (let [n (if (neg? n) (- 0 n) (inc n))]
-                    (loop [env (Closure''env this) #_"int" i 0 #_"seq" s (seq args)]
-                        (let [#_"Binding" lb (some (λ [%] (when (= (Binding''idx %) i) %)) (get fun :locals))]
+                    (loop [env (get this :env) #_"int" i 0 #_"seq" s (seq args)]
+                        (let [#_"Binding" lb (some (λ [%] (when (= (get % :idx) i) %)) (get fun :locals))]
                             (if (zero? i)
-                                (recur (if (some? lb) (assoc env (Binding''sym lb) this) env) (inc i) s)
+                                (recur (if (some? lb) (assoc env (get lb :sym) this) env) (inc i) s)
                                 (if (< i n)
-                                    (recur (assoc env (Binding''sym lb) (first s)) (inc i) (next s))
-                                    (if (some? s) (assoc env (Binding''sym lb) s) env)
+                                    (recur (assoc env (get lb :sym) (first s)) (inc i) (next s))
+                                    (if (some? s) (assoc env (get lb :sym) s) env)
                                 )
                             )
                         )
@@ -810,10 +749,10 @@
 (def apply (λ [f & s]
     (let [s (spread s)]
         (cond
-            (closure? f)      (Closure''applyTo f, s)
-            (atom? f)         (apply (deref f) s)
-            (-/clojure-fn? f) (-/IFn''applyTo f, (when (seq s) (reverse! (reverse s))))
-            :else             (-/throw! (str "apply not supported on " f))
+            (closure? f) (Closure''applyTo f, s)
+            (atom? f)    (apply (deref f) s)
+            (-/-fn? f)   (-/IFn''applyTo f, (when (seq s) (reverse! (reverse s))))
+            :else        (-/throw! (str "apply not supported on " f))
         )
     )
 ))
@@ -1001,13 +940,12 @@
     (def Binding'meta (λ [] ))
 
     (def #_"Binding" Binding'new (λ [#_"Symbol" sym, #_"int" idx]
-        (-> (anew 3) (aset! 0 Binding'meta) (aset! 1 sym) (aset! 2 idx))
+        (cons-map
+            #_"meta" :meta Binding'meta
+            #_"Symbol" :sym sym
+            #_"int" :idx idx
+        )
     ))
-
-    (def local-binding? (λ [x] (and (-/array? x) (= (alength x) 3) (identical? (aget x 0) Binding'meta))))
-
-    (def #_"Symbol" Binding''sym (λ [#_"Binding" this] (when (local-binding? this) (aget this 1))))
-    (def #_"int"    Binding''idx (λ [#_"Binding" this] (when (local-binding? this) (aget this 2))))
 )
 
 (about #_"BindingExpr"
@@ -1047,7 +985,7 @@
                 (if (some? name)
                     (let [
                         #_"Binding" lb (Binding'new name, 0)
-                        scope (update scope :local-env assoc (Binding''sym lb) lb)
+                        scope (update scope :local-env assoc (get lb :sym) lb)
                         scope (update scope :fun update :locals (λ [%] (cons lb %)))
                     ]
                         scope
@@ -1059,7 +997,7 @@
                     (if (some? s)
                         (let [#_"symbol?" sym (first s)]
                             (if (or (symbol? sym) (-/-symbol? sym))
-                                (if (nil? (Symbol''ns sym))
+                                (if (nil? (get sym :ns))
                                     (cond
                                         (= sym '&)
                                             (if (not variadic?)
@@ -1072,7 +1010,7 @@
                                             (let [
                                                 arity (if (not variadic?) (inc arity) (- 0 (inc arity)))
                                                 #_"Binding" lb (Binding'new sym, (abs arity))
-                                                scope (update scope :local-env assoc (Binding''sym lb) lb)
+                                                scope (update scope :local-env assoc (get lb :sym) lb)
                                                 scope (update scope :fun update :locals (λ [%] (cons lb %)))
                                             ]
                                                 (recur scope arity variadic? (next s))
@@ -1135,7 +1073,7 @@
 
     (def #_"Var" DefExpr'lookupVar (λ [#_"Symbol" sym]
         (let [sym (symbol! sym)]
-            (if (nil? (Symbol''ns sym))
+            (if (nil? (get sym :ns))
                 (or
                     (get (deref Beagle'ns) sym)
                     (let [#_"var" v (Var'new)]
@@ -1259,10 +1197,10 @@
     (def #_"Expr" Compiler'analyzeSymbol (λ [#_"Symbol" sym, #_"map" scope]
         (let [sym (symbol! sym)]
             (or
-                (when (= (-/int (-/String''charAt (Symbol''name sym), 0)) Unicode'colon)
+                (when (= (-/int (-/String''charAt (get sym :name), 0)) Unicode'colon)
                     (LiteralExpr'new sym)
                 )
-                (when (nil? (Symbol''ns sym))
+                (when (nil? (get sym :ns))
                     (let [#_"Binding" lb (get (get scope :local-env) sym)]
                         (when (some? lb)
                             (do
@@ -1273,8 +1211,8 @@
                     )
                 )
                 (let [#_"any" o
-                        (if (some? (Symbol''ns sym))
-                            (-/Namespace''findInternedVar (-/the-ns (-/-symbol "beagle.core")), (-/-symbol (Symbol''name sym)))
+                        (if (some? (get sym :ns))
+                            (-/Namespace''findInternedVar (-/the-ns (-/-symbol "beagle.core")), (-/-symbol (get sym :name)))
                             (get (deref Beagle'ns) sym)
                         )]
                     (if (some? o)
@@ -1493,7 +1431,7 @@
         )
     ))
 
-    (def #_"any" LispReader'READ_FINISHED (anew 0))
+    (def #_"any" LispReader'READ_FINISHED (λ [] ))
 
     (def #_"seq" LispReader'readDelimitedForms (λ [#_"PushbackReader" r, #_"map" scope, #_"unicode" delim]
         (loop [#_"seq" z nil]
