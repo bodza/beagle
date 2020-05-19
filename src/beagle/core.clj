@@ -10,7 +10,7 @@
 (-/defmacro import! [& syms-or-seqs] `(do (doseq [n# (keys (ns-imports *ns*))] (ns-unmap *ns* n#)) (import ~@syms-or-seqs)))
 
 (import!
-    [java.lang Appendable Character Error Integer Long Number String StringBuilder]
+    [java.lang Appendable Character Error Integer Number String StringBuilder]
     [java.io Flushable PrintWriter PushbackReader Reader]
     [java.util.regex Matcher Pattern]
     [clojure.lang IFn ISeq Namespace Seqable Var]
@@ -22,15 +22,13 @@
     )
 )
 
-(refer! clojure.core [-> < <= == and bit-and bit-shift-left bit-shift-right char cond cons count declare defmacro identical? instance? int keyword? list map? name namespace or str the-ns unchecked-add-int unchecked-dec-int unchecked-inc-int unchecked-subtract-int var? when])
+(refer! clojure.core [-> < <= == and char cond cons count declare defmacro identical? instance? int keyword? list map? name namespace or str the-ns unchecked-dec-int unchecked-inc-int unchecked-negate-int var? when])
 
 (defn throw! [#_"String" s] (throw (Error. s)))
 
 (defn #_"Appendable" Appendable''append [^Appendable this, #_"char|String" x] (.append this, x))
 
 (defn char? [x] (instance? Character x))
-
-(defn int? [x] (or (instance? Integer x) (instance? Long x)))
 
 (defn #_"int" Integer'parseInt [#_"String" s] (Integer/parseInt s))
 
@@ -101,7 +99,7 @@
 
 (-/import!)
 
-(-/refer! beagle.bore [-> -fn? -seq -seq? -seqable? -symbol -symbol? < <= == A'get A'length A'new A'set Appendable''append Flushable''flush IFn''applyTo ISeq''first ISeq''next Integer'parseInt Matcher''matches Namespace''findInternedVar Number''toString Pattern''matcher Pattern'compile PushbackReader''unread Reader''read Seqable''seq String''charAt String''equals String''indexOf String''length String''substring StringBuilder''append StringBuilder''toString StringBuilder'new System'in System'out Var''-get and array? bit-and bit-shift-left bit-shift-right char char? cond cons count declare identical? instance? int int! keyword? list map? name namespace number? or str string? the-ns throw! unchecked-add-int unchecked-dec-int unchecked-inc-int unchecked-subtract-int var? when])
+(-/refer! beagle.bore [-> -fn? -seq -seq? -seqable? -symbol -symbol? < <= == A'get A'length A'new A'set Appendable''append Flushable''flush IFn''applyTo ISeq''first ISeq''next Integer'parseInt Matcher''matches Namespace''findInternedVar Number''toString Pattern''matcher Pattern'compile PushbackReader''unread Reader''read Seqable''seq String''charAt String''equals String''indexOf String''length String''substring StringBuilder''append StringBuilder''toString StringBuilder'new System'in System'out Var''-get and array? char char? cond cons count declare identical? instance? int int! keyword? list map? name namespace number? or str string? the-ns throw! unchecked-dec-int unchecked-inc-int unchecked-negate-int var? when])
 
 (-/defmacro about [& s] (-/cons 'do s))
 
@@ -167,9 +165,26 @@
     (def reduce-kv (λ [f r kvs] (let [kvs (seq kvs)] (if (some? kvs) (#_recur reduce-kv f (f r (first kvs) (second kvs)) (next (next kvs))) r))))
 )
 
+(about #_"beagle.Numbers"
+    (def inc (λ [x] (-/unchecked-inc-int (-/int! x))))
+    (def dec (λ [x] (-/unchecked-dec-int (-/int! x))))
+
+    (def neg (λ [x] (-/unchecked-negate-int (-/int! x))))
+
+    (def < -/<)
+    (def <= -/<=)
+
+    (declare =)
+
+    (def neg? (λ [n] (< n 0)))
+    (def zero? (λ [n] (= n 0)))
+    (def pos? (λ [n] (< 0 n)))
+
+    (def abs (λ [a] (if (neg? a) (neg a) a)))
+)
+
 (about #_"beagle.Counted"
     (declare Cons''count)
-    (declare inc)
 
     (def count (λ [x]
         (cond
@@ -218,8 +233,6 @@
 )
 
 (about #_"append, str, pr, prn"
-    (declare =)
-
     (def #_"char|String" escape-str (λ [#_"char" c]
         (cond
             (= (-/int c) Unicode'newline)   "\\n"
@@ -424,34 +437,6 @@
         :else            (-/throw! (-/str "= not supported on " x ", not even on " y))
     )
 ))
-
-(def not= (λ [x y] (not (= x y))))
-)
-
-(about #_"beagle.Numbers"
-
-(def + (λ [x y] (-/unchecked-add-int (-/int! x) (-/int! y))))
-(def - (λ [x y] (-/unchecked-subtract-int (-/int! x) (-/int! y))))
-
-(def inc -/unchecked-inc-int)
-(def dec -/unchecked-dec-int)
-
-(def & (λ [x y] (-/int! (-/bit-and x y))))
-
-(def << (λ [x y] (-/int! (-/bit-shift-left x y))))
-(def >> (λ [x y] (-/int! (-/bit-shift-right x y))))
-
-(def < -/<)
-(def <= -/<=)
-
-(def max (λ [x y] (if (< y x) x y)))
-(def min (λ [x y] (if (< x y) x y)))
-
-(def neg? (λ [n] (< n 0)))
-(def zero? (λ [n] (= n 0)))
-(def pos? (λ [n] (< 0 n)))
-
-(def abs (λ [a] (if (neg? a) (- 0 a) a)))
 )
 
 (about #_"beagle.Cons"
@@ -593,7 +578,7 @@
 
     (def #_"Symbol" Symbol'intern (λ [#_"String" nsname]
         (let [#_"int" i (-/String''indexOf nsname, Unicode'slash)]
-            (if (or (= i -1) (= nsname "/"))
+            (if (or (neg? i) (= nsname "/"))
                 (Symbol'new nil, nsname)
                 (Symbol'new (-/String''substring nsname, 0, i), (-/String''substring nsname, (inc i)))
             )
@@ -648,17 +633,15 @@
     (def #_"gen" Gen''apply    (λ [#_"gen" gen]                  (cons [:apply] gen)))
     (def #_"gen" Gen''assoc    (λ [#_"gen" gen]                  (cons [:assoc] gen)))
     (def #_"gen" Gen''cons     (λ [#_"gen" gen]                  (cons [:cons] gen)))
-    (def #_"gen" Gen''create   (λ [#_"gen" gen, #_"FnExpr" fun]  (cons [:create fun] gen)))
-    (def #_"gen" Gen''dup      (λ [#_"gen" gen]                  (cons [:dup] gen)))
+    (def #_"gen" Gen''lambda   (λ [#_"gen" gen]                  (cons [:lambda] gen)))
     (def #_"gen" Gen''get      (λ [#_"gen" gen, #_"Symbol" name] (cons [:get name] gen)))
     (def #_"gen" Gen''goto     (λ [#_"gen" gen, #_"label" label] (cons [:goto label] gen)))
-    (def #_"gen" Gen''if-eq?   (λ [#_"gen" gen, #_"label" label] (cons [:if-eq? label] gen)))
-    (def #_"gen" Gen''if-nil?  (λ [#_"gen" gen, #_"label" label] (cons [:if-nil? label] gen)))
-    (def #_"gen" Gen''invoke-1 (λ [#_"gen" gen, #_"fn" f]        (cons [:invoke-1 f] gen)))
-    (def #_"gen" Gen''invoke-2 (λ [#_"gen" gen, #_"fn" f]        (cons [:invoke-2 f] gen)))
+    (def #_"gen" Gen''if       (λ [#_"gen" gen, #_"label" label] (cons [:if label] gen)))
     (def #_"gen" Gen''pop      (λ [#_"gen" gen]                  (cons [:pop] gen)))
     (def #_"gen" Gen''push     (λ [#_"gen" gen, #_"value" value] (cons [:push value] gen)))
     (def #_"gen" Gen''return   (λ [#_"gen" gen]                  (cons [:return] gen)))
+    (def #_"gen" Gen''var-get  (λ [#_"gen" gen]                  (cons [:var-get] gen)))
+    (def #_"gen" Gen''var-set! (λ [#_"gen" gen]                  (cons [:var-set!] gen)))
 )
 
 (about #_"Compiler"
@@ -699,35 +682,35 @@
     ))
 )
 
-(about #_"beagle.Closure"
+(about #_"beagle.Lambda"
 
-(about #_"Closure"
-    (def Closure'meta (λ [] ))
+(about #_"Lambda"
+    (def Lambda'meta (λ [] ))
 
-    (def #_"Closure" Closure'new (λ [#_"FnExpr" fun, #_"map" env]
+    (def #_"Lambda" Lambda'new (λ [#_"FnExpr" fun, #_"map" env]
         (cons-map
-            #_"meta" :meta Closure'meta
+            #_"meta" :meta Lambda'meta
             #_"FnExpr" :fun fun
             #_"map" :env env
         )
     ))
 
-    (def closure? (λ [x] (and (cons? x) (identical? (get x :meta) Closure'meta))))
+    (def lambda? (λ [x] (and (cons? x) (identical? (get x :meta) Lambda'meta))))
 
     (declare Machine'compute)
     (declare FnExpr''compile)
 
-    (def #_"any" Closure''applyTo (λ [#_"Closure" this, #_"seq" args]
+    (def #_"any" Lambda''applyTo (λ [#_"Lambda" this, #_"seq" args]
         (let [
             #_"FnExpr" fun (get this :fun) #_"int" n (get fun :arity)
             _
                 (let [#_"int" m (count args)]
-                    (when (< m (dec (- 0 n)))
+                    (when (< m (dec (neg n)))
                         (-/throw! (str "wrong number of args (" m ") passed to " this))
                     )
                 )
             #_"map" env
-                (let [n (if (neg? n) (- 0 n) (inc n))]
+                (let [n (if (neg? n) (neg n) (inc n))]
                     (loop [env (get this :env) #_"int" i 0 #_"seq" s (seq args)]
                         (let [#_"Binding" lb (some (λ [%] (when (= (get % :idx) i) %)) (get fun :locals))]
                             (if (zero? i)
@@ -749,10 +732,10 @@
 (def apply (λ [f & s]
     (let [s (spread s)]
         (cond
-            (closure? f) (Closure''applyTo f, s)
-            (atom? f)    (apply (deref f) s)
-            (-/-fn? f)   (-/IFn''applyTo f, (when (seq s) (reverse! (reverse s))))
-            :else        (-/throw! (str "apply not supported on " f))
+            (lambda? f) (Lambda''applyTo f, s)
+            (atom? f)   (apply (deref f) s)
+            (-/-fn? f)  (-/IFn''applyTo f, (when (seq s) (reverse! (reverse s))))
+            :else       (-/throw! (str "apply not supported on " f))
         )
     )
 ))
@@ -789,7 +772,7 @@
     ))
 
     (def #_"gen" LiteralExpr''emit (λ [#_"LiteralExpr" this, #_"Context" context, #_"map" scope, #_"gen" gen]
-        (if (not= context :Context'STATEMENT) (Gen''push gen, (get this :value)) gen)
+        (if (= context :Context'STATEMENT) gen (Gen''push gen, (get this :value)))
     ))
 )
 
@@ -806,7 +789,7 @@
     (def #_"gen" VarExpr''emit (λ [#_"VarExpr" this, #_"Context" context, #_"map" scope, #_"gen" gen]
         (let [
             gen (Gen''push gen, (get this :var))
-            gen (Gen''invoke-1 gen, Var''get)
+            gen (Gen''var-get gen)
         ]
             (if (= context :Context'STATEMENT)
                 (Gen''pop gen)
@@ -883,19 +866,14 @@
 
     (def #_"gen" IfExpr''emit (λ [#_"IfExpr" this, #_"Context" context, #_"map" scope, #_"gen" gen]
         (let [
-            #_"label" l'nil (Gen''label gen) #_"label" l'false (Gen''label gen) #_"label" l'end (Gen''label gen)
+            #_"label" l'then (Gen''label gen) #_"label" l'over (Gen''label gen)
             gen (Expr''emit (get this :test), :Context'EXPRESSION, scope, gen)
-            gen (Gen''dup gen)
-            gen (Gen''if-nil? gen, l'nil)
-            gen (Gen''push gen, false)
-            gen (Gen''if-eq? gen, l'false)
-            gen (Expr''emit (get this :then), context, scope, gen)
-            gen (Gen''goto gen, l'end)
-            gen (Gen''mark! gen, l'nil)
-            gen (Gen''pop gen)
-            gen (Gen''mark! gen, l'false)
+            gen (Gen''if gen, l'then)
             gen (Expr''emit (get this :else), context, scope, gen)
-            gen (Gen''mark! gen, l'end)
+            gen (Gen''goto gen, l'over)
+            gen (Gen''mark! gen, l'then)
+            gen (Expr''emit (get this :then), context, scope, gen)
+            gen (Gen''mark! gen, l'over)
         ]
             gen
         )
@@ -959,7 +937,7 @@
     ))
 
     (def #_"gen" BindingExpr''emit (λ [#_"BindingExpr" this, #_"Context" context, #_"map" scope, #_"gen" gen]
-        (if (not= context :Context'STATEMENT) (Compiler'emitLocal scope, gen, (get this :lb)) gen)
+        (if (= context :Context'STATEMENT) gen (Compiler'emitLocal scope, gen, (get this :lb)))
     ))
 )
 
@@ -1008,7 +986,7 @@
                                             (-/throw! (str "excess variadic parameter: " sym))
                                         :else
                                             (let [
-                                                arity (if (not variadic?) (inc arity) (- 0 (inc arity)))
+                                                arity (if (not variadic?) (inc arity) (neg (inc arity)))
                                                 #_"Binding" lb (Binding'new sym, (abs arity))
                                                 scope (update scope :local-env assoc (get lb :sym) lb)
                                                 scope (update scope :fun update :locals (λ [%] (cons lb %)))
@@ -1033,13 +1011,14 @@
     ))
 
     (def #_"gen" FnExpr''emit (λ [#_"FnExpr" this, #_"Context" context, #_"map" scope, #_"gen" gen]
-        (if (not= context :Context'STATEMENT)
+        (if (= context :Context'STATEMENT)
+            gen
             (let [
                 gen (Compiler'emitLocals scope, gen, (deref (get this :'closes)))
+                gen (Gen''push gen, this)
             ]
-                (Gen''create gen, this)
+                (Gen''lambda gen)
             )
-            gen
         )
     ))
 
@@ -1108,11 +1087,10 @@
             gen
                 (if (get this :initProvided)
                     (let [
-                        gen (Gen''dup gen)
                         gen (Expr''emit (get this :init), :Context'EXPRESSION, scope, gen)
-                        gen (Gen''invoke-2 gen, Var''bindRoot)
+                        gen (Gen''var-set! gen)
                     ]
-                        (Gen''pop gen)
+                        gen
                     )
                     gen
                 )
@@ -1251,11 +1229,9 @@
         )
     ))
 
-    (declare Closure'new)
-
     (def #_"edn" Compiler'eval (λ [#_"edn" form, #_"map" scope]
         (let [form (Compiler'macroexpand form, scope)]
-            (apply (Closure'new (Compiler'analyze (list (symbol! 'λ) [] form), :Context'EXPRESSION, scope), nil) nil)
+            (apply (Lambda'new (Compiler'analyze (list (symbol! 'λ) [] form), :Context'EXPRESSION, scope), nil) nil)
         )
     ))
 )
@@ -1270,20 +1246,18 @@
         (loop [#_"stack" s nil #_"int" i 0]
             (let [xy (aget code i) x (first xy) y (second xy)]
                 (cond
-                    (= x :apply)    (let [b (first s) a (second s)             s (next (next s))]        (recur (cons (apply a b) s)               (inc i)))
-                    (= x :assoc)    (let [c (first s) b (second s) a (third s) s (next (next (next s)))] (recur (cons (assoc a b c) s)             (inc i)))
-                    (= x :cons)     (let [b (first s) a (second s)             s (next (next s))]        (recur (cons (cons b a) s)                (inc i)))
-                    (= x :create)   (let [a (first s)                          s (next s)]               (recur (cons (Closure'new y, a) s)        (inc i)))
-                    (= x :dup)      (let [a (first s)]                                                   (recur (cons a s)                         (inc i)))
-                    (= x :get)                                                                           (recur (cons (get env y) s)               (inc i))
-                    (= x :goto)                                                                          (recur s                        (deref y))
-                    (= x :if-eq?)   (let [b (first s) a (second s)             s (next (next s))]        (recur s        (if     (= a b) (deref y) (inc i))))
-                    (= x :if-nil?)  (let [a (first s)                          s (next s)]               (recur s        (if  (nil? a)   (deref y) (inc i))))
-                    (= x :invoke-1) (let [a (first s)                          s (next s)]               (recur (cons (y a) s)                     (inc i)))
-                    (= x :invoke-2) (let [b (first s) a (second s)             s (next (next s))]        (recur (cons (y a b) s)                   (inc i)))
-                    (= x :pop)                                                                           (recur (next s)                           (inc i))
-                    (= x :push)                                                                          (recur (cons y s)                         (inc i))
-                    (= x :return)   (first s)
+                    (= x :apply)    (let [b (first s) a (second s)             s (next (next s))]        (recur (cons (apply a b) s)          (inc i)))
+                    (= x :assoc)    (let [c (first s) b (second s) a (third s) s (next (next (next s)))] (recur (cons (assoc a b c) s)        (inc i)))
+                    (= x :cons)     (let [b (first s) a (second s)             s (next (next s))]        (recur (cons (cons b a) s)           (inc i)))
+                    (= x :get)                                                                           (recur (cons (get env y) s)          (inc i))
+                    (= x :goto)                                                                          (recur s                   (deref y))
+                    (= x :if)       (let [a (first s)                          s (next s)]               (recur s             (if a (deref y) (inc i))))
+                    (= x :lambda)   (let [b (first s) a (second s)             s (next (next s))]        (recur (cons (Lambda'new a, b) s)    (inc i)))
+                    (= x :pop)                                                                           (recur (next s)                      (inc i))
+                    (= x :push)                                                                          (recur (cons y s)                    (inc i))
+                    (= x :return)           (first s)
+                    (= x :var-get)  (let [a (first s)                          s (next s)]               (recur (cons (Var''get a) s)         (inc i)))
+                    (= x :var-set!) (let [b (first s) a (second s)             s (next (next s))]        (recur (cons (Var''bindRoot a, b) s) (inc i)))
                 )
             )
         )
@@ -1301,7 +1275,7 @@
     ))
 
     (def #_"boolean" LispReader'isTerminatingMacro (λ [#_"unicode" c]
-        (and (LispReader'isMacro c) (not= c Unicode'hash) (not= c Unicode'apostrophe))
+        (and (LispReader'isMacro c) (not (= c Unicode'hash)) (not (= c Unicode'apostrophe)))
     ))
 
     (def #_"boolean" LispReader'isDigit (λ [#_"unicode" c]
@@ -1316,7 +1290,7 @@
 
     (def #_"Unicode" LispReader'read1 (λ [#_"Reader" r]
         (let [#_"unicode" c (-/Reader''read r)]
-            (when (not= c -1)
+            (when (not (neg? c))
                 c
             )
         )
@@ -1329,7 +1303,7 @@
         nil
     ))
 
-    (def #_"Pattern" LispReader'rxInteger (-/Pattern'compile "[-+]?(?:0|[1-9][0-9]*)"))
+    (def #_"Pattern" LispReader'rxInteger (-/Pattern'compile "0|[1-9][0-9]*"))
 
     (def #_"number" LispReader'matchNumber (λ [#_"String" s]
         (let [#_"Matcher" m (-/Pattern''matcher LispReader'rxInteger, s)]
@@ -1463,7 +1437,7 @@
             (loop []
                 (let [#_"Unicode" c (LispReader'read1 r)]
                     (if (some? c)
-                        (when (not= c Unicode'quotation)
+                        (when (not (= c Unicode'quotation))
                             (do
                                 (-/StringBuilder''append sb, (-/char (if (= c Unicode'backslash) (StringReader'escape r) c)))
                                 (recur)
