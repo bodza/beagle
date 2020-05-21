@@ -652,7 +652,7 @@
         (loop [code (Code''push code, nil) #_"seq" s (seq rargs)]
             (if (some? s)
                 (let [
-                    code (Code''emit code, (first s), :Context'EXPRESSION)
+                    code (Code''emit code, (first s))
                     code (Code''cons code)
                 ]
                     (recur code (next s))
@@ -756,24 +756,25 @@
     (def #_"LiteralExpr" LiteralExpr'TRUE  (LiteralExpr'new true))
     (def #_"LiteralExpr" LiteralExpr'FALSE (LiteralExpr'new false))
 
-    (defn #_"Expr" LiteralExpr'parse [#_"seq" form, #_"Context" context, #_"map" scope]
-        (let [#_"int" n (dec (count form))]
-            (if (= n 1)
-                (let [#_"any" x (second form)]
-                    (cond
-                        (= x nil)    LiteralExpr'NIL
-                        (= x true)   LiteralExpr'TRUE
-                        (= x false)  LiteralExpr'FALSE
-                        :else       (LiteralExpr'new x)
-                    )
-                )
-                (-/throw! (str "wrong number of arguments passed to quote: " n))
+    (defn #_"Expr" LiteralExpr'parse [#_"seq" form, #_"map" scope]
+        (let [#_"int" n (count form)]
+            (cond
+                (< n 2) (-/throw! (str "too few arguments to quote"))
+                (< 2 n) (-/throw! (str "too many arguments to quote"))
+            )
+        )
+        (let [#_"any" x (second form)]
+            (cond
+                (= x nil)    LiteralExpr'NIL
+                (= x true)   LiteralExpr'TRUE
+                (= x false)  LiteralExpr'FALSE
+                :else       (LiteralExpr'new x)
             )
         )
     )
 
-    (defn #_"seq" LiteralExpr''emit [#_"LiteralExpr" this, #_"Context" context, #_"seq" code]
-        (if (= context :Context'STATEMENT) code (Code''push code, (get this :value)))
+    (defn #_"seq" LiteralExpr''emit [#_"LiteralExpr" this, #_"seq" code]
+        (Code''push code, (get this :value))
     )
 )
 
@@ -787,15 +788,10 @@
         )
     )
 
-    (defn #_"seq" VarExpr''emit [#_"VarExpr" this, #_"Context" context, #_"seq" code]
-        (let [
-            code (Code''push code, (get this :var))
-            code (Code''var-get code)
-        ]
-            (if (= context :Context'STATEMENT)
-                (Code''pop code)
-                code
-            )
+    (defn #_"seq" VarExpr''emit [#_"VarExpr" this, #_"seq" code]
+        (-> code
+            (Code''push (get this :var))
+            (Code''var-get)
         )
     )
 )
@@ -812,15 +808,12 @@
 
     (declare Compiler'analyze)
 
-    (defn #_"Expr" BodyExpr'parse [#_"seq" form, #_"Context" context, #_"map" scope]
+    (defn #_"Expr" BodyExpr'parse [#_"seq" form, #_"map" scope]
         (let [
-            #_"seq" s form s (if (= (first s) 'do) (next s) s)
             #_"Expr*" z
-                (loop [z nil s s]
+                (loop [z nil #_"seq" s (next form)]
                     (if (some? s)
-                        (let [#_"Context" c (if (or (= context :Context'STATEMENT) (some? (next s))) :Context'STATEMENT context)]
-                            (recur (cons (Compiler'analyze (first s), c, scope) z) (next s))
-                        )
+                        (recur (cons (Compiler'analyze (first s), scope) z) (next s))
                         (reverse z)
                     )
                 )
@@ -829,11 +822,15 @@
         )
     )
 
-    (defn #_"seq" BodyExpr''emit [#_"BodyExpr" this, #_"Context" context, #_"seq" code]
+    (defn #_"seq" BodyExpr''emit [#_"BodyExpr" this, #_"seq" code]
         (loop [code code #_"seq" s (seq (get this :exprs))]
-            (if (some? (next s))
-                (recur (Code''emit code, (first s), :Context'STATEMENT) (next s))
-                (Code''emit code, (first s), context)
+            (let [
+                code (Code''emit code, (first s))
+            ]
+                (if (some? (next s))
+                    (recur (Code''pop code) (next s))
+                    code
+                )
             )
         )
     )
@@ -851,31 +848,33 @@
         )
     )
 
-    (defn #_"Expr" IfExpr'parse [#_"seq" form, #_"Context" context, #_"map" scope]
-        (cond
-            (< 4 (count form)) (-/throw! "too many arguments to if")
-            (< (count form) 4) (-/throw! "too few arguments to if")
+    (defn #_"Expr" IfExpr'parse [#_"seq" form, #_"map" scope]
+        (let [#_"int" n (count form)]
+            (cond
+                (< n 4) (-/throw! "too few arguments to if")
+                (< 4 n) (-/throw! "too many arguments to if")
+            )
         )
         (let [
-            #_"Expr" test (Compiler'analyze (second form), :Context'EXPRESSION, scope)
-            #_"Expr" then (Compiler'analyze (third form), context, scope)
-            #_"Expr" else (Compiler'analyze (fourth form), context, scope)
+            #_"Expr" test (Compiler'analyze (second form), scope)
+            #_"Expr" then (Compiler'analyze (third form), scope)
+            #_"Expr" else (Compiler'analyze (fourth form), scope)
         ]
             (IfExpr'new test, then, else)
         )
     )
 
-    (defn #_"seq" IfExpr''emit [#_"IfExpr" this, #_"Context" context, #_"seq" code]
+    (defn #_"seq" IfExpr''emit [#_"IfExpr" this, #_"seq" code]
         (let [
             #_"label" l'then (Code''label code) #_"label" l'over (Code''label code)
         ]
             (-> code
-                (Code''emit (get this :test), :Context'EXPRESSION)
+                (Code''emit (get this :test))
                 (Code''if l'then)
-                (Code''emit (get this :else), context)
+                (Code''emit (get this :else))
                 (Code''goto l'over)
                 (Code''mark! l'then)
-                (Code''emit (get this :then), context)
+                (Code''emit (get this :then))
                 (Code''mark! l'over)
             )
         )
@@ -893,25 +892,20 @@
         )
     )
 
-    (defn #_"Expr" InvokeExpr'parse [#_"seq" form, #_"Context" context, #_"map" scope]
+    (defn #_"Expr" InvokeExpr'parse [#_"seq" form, #_"map" scope]
         (let [
-            #_"Expr" fexpr (Compiler'analyze (first form), :Context'EXPRESSION, scope)
-            #_"Expr*" rargs (reduce (fn [%1 %2] (conj %1 (Compiler'analyze %2, :Context'EXPRESSION, scope))) nil (next form))
+            #_"Expr" fexpr (Compiler'analyze (first form), scope)
+            #_"Expr*" rargs (reduce (fn [%1 %2] (conj %1 (Compiler'analyze %2, scope))) nil (next form))
         ]
             (InvokeExpr'new fexpr, rargs)
         )
     )
 
-    (defn #_"seq" InvokeExpr''emit [#_"InvokeExpr" this, #_"Context" context, #_"seq" code]
-        (let [
-            code (Code''emit code, (get this :fexpr), :Context'EXPRESSION)
-            code (Compiler'emitArgs code, (get this :rargs))
-            code (Code''apply code)
-        ]
-            (if (= context :Context'STATEMENT)
-                (Code''pop code)
-                code
-            )
+    (defn #_"seq" InvokeExpr''emit [#_"InvokeExpr" this, #_"seq" code]
+        (-> code
+            (Code''emit (get this :fexpr))
+            (Compiler'emitArgs (get this :rargs))
+            (Code''apply)
         )
     )
 )
@@ -938,8 +932,8 @@
         )
     )
 
-    (defn #_"seq" BindingExpr''emit [#_"BindingExpr" this, #_"Context" context, #_"seq" code]
-        (if (= context :Context'STATEMENT) code (Compiler'emitLocal code, (get this :lb)))
+    (defn #_"seq" BindingExpr''emit [#_"BindingExpr" this, #_"seq" code]
+        (Compiler'emitLocal code, (get this :lb))
     )
 )
 
@@ -957,7 +951,7 @@
         )
     )
 
-    (defn #_"FnExpr" FnExpr'parse [#_"seq" form, #_"Context" context, #_"map" scope]
+    (defn #_"FnExpr" FnExpr'parse [#_"seq" form, #_"map" scope]
         (let [
             #_"symbol?" name (second form) ? (or (symbol? name) (-/-symbol? name)) name (when ? name) form (if ? (next (next form)) (next form))
             scope (update scope :fun FnExpr'new)
@@ -1008,18 +1002,15 @@
                     )
                 )
         ]
-            (assoc (get scope :fun) :body (BodyExpr'parse (next form), :Context'RETURN, scope))
+            (assoc (get scope :fun) :body (BodyExpr'parse (cons 'do (next form)), scope))
         )
     )
 
-    (defn #_"seq" FnExpr''emit [#_"FnExpr" this, #_"Context" context, #_"seq" code]
-        (if (= context :Context'STATEMENT)
-            code
-            (-> code
-                (Compiler'emitLocals (deref (get this :'closes)))
-                (Code''push this)
-                (Code''lambda)
-            )
+    (defn #_"seq" FnExpr''emit [#_"FnExpr" this, #_"seq" code]
+        (-> code
+            (Compiler'emitLocals (deref (get this :'closes)))
+            (Code''push this)
+            (Code''lambda)
         )
     )
 
@@ -1027,7 +1018,7 @@
         (let [
             #_"seq" code
                 (-> nil
-                    (Code''emit (get this :body), :Context'RETURN)
+                    (Code''emit (get this :body))
                     (Code''return)
                 )
         ]
@@ -1041,12 +1032,11 @@
 (about #_"DefExpr"
     (defn DefExpr'meta [] )
 
-    (defn #_"DefExpr" DefExpr'new [#_"Var" var, #_"Expr" init, #_"boolean" initProvided]
+    (defn #_"DefExpr" DefExpr'new [#_"Var" var, #_"Expr" init]
         (cons-map
             #_"meta" :meta DefExpr'meta
             #_"Var" :var var
             #_"Expr" :init init
-            #_"boolean" :initProvided initProvided
         )
     )
 
@@ -1067,54 +1057,42 @@
         )
     )
 
-    (defn #_"Expr" DefExpr'parse [#_"seq" form, #_"Context" context, #_"map" scope]
+    (defn #_"Expr" DefExpr'parse [#_"seq" form, #_"map" scope]
         (let [#_"int" n (count form)]
             (cond
+                (< n 3) (-/throw! "too few arguments to def")
                 (< 3 n) (-/throw! "too many arguments to def")
-                (< n 2) (-/throw! "too few arguments to def")
-                :else
-                    (let [#_"symbol?" s (second form)]
-                        (if (or (symbol? s) (-/-symbol? s))
-                            (DefExpr'new (DefExpr'lookupVar s), (Compiler'analyze (third form), :Context'EXPRESSION, scope), (= n 3))
-                            (-/throw! "first argument to def must be a symbol")
-                        )
-                    )
+            )
+        )
+        (let [#_"symbol?" s (second form)]
+            (if (or (symbol? s) (-/-symbol? s))
+                (DefExpr'new (DefExpr'lookupVar s), (Compiler'analyze (third form), scope))
+                (-/throw! "first argument to def must be a symbol")
             )
         )
     )
 
-    (defn #_"seq" DefExpr''emit [#_"DefExpr" this, #_"Context" context, #_"seq" code]
-        (let [
-            code (Code''push code, (get this :var))
-            code
-                (if (get this :initProvided)
-                    (-> code
-                        (Code''emit (get this :init), :Context'EXPRESSION)
-                        (Code''var-set!)
-                    )
-                    code
-                )
-        ]
-            (if (= context :Context'STATEMENT)
-                (Code''pop code)
-                code
-            )
+    (defn #_"seq" DefExpr''emit [#_"DefExpr" this, #_"seq" code]
+        (-> code
+            (Code''push (get this :var))
+            (Code''emit (get this :init))
+            (Code''var-set!)
         )
     )
 )
 
 (about #_"Code"
-    (defn #_"seq" Code''emit [#_"seq" code, #_"Expr" expr, #_"Context" context]
+    (defn #_"seq" Code''emit [#_"seq" code, #_"Expr" expr]
         (let [#_"meta" m (get expr :meta)]
             (cond
-                (identical? m LiteralExpr'meta) (LiteralExpr''emit expr, context, code)
-                (identical? m VarExpr'meta)     (VarExpr''emit expr, context, code)
-                (identical? m BodyExpr'meta)    (BodyExpr''emit expr, context, code)
-                (identical? m IfExpr'meta)      (IfExpr''emit expr, context, code)
-                (identical? m InvokeExpr'meta)  (InvokeExpr''emit expr, context, code)
-                (identical? m BindingExpr'meta) (BindingExpr''emit expr, context, code)
-                (identical? m FnExpr'meta)      (FnExpr''emit expr, context, code)
-                (identical? m DefExpr'meta)     (DefExpr''emit expr, context, code)
+                (identical? m LiteralExpr'meta) (LiteralExpr''emit expr, code)
+                (identical? m VarExpr'meta)     (VarExpr''emit expr, code)
+                (identical? m BodyExpr'meta)    (BodyExpr''emit expr, code)
+                (identical? m IfExpr'meta)      (IfExpr''emit expr, code)
+                (identical? m InvokeExpr'meta)  (InvokeExpr''emit expr, code)
+                (identical? m BindingExpr'meta) (BindingExpr''emit expr, code)
+                (identical? m FnExpr'meta)      (FnExpr''emit expr, code)
+                (identical? m DefExpr'meta)     (DefExpr''emit expr, code)
                 :else                           (-/throw! (str "Code''emit not supported on " expr))
             )
         )
@@ -1136,7 +1114,7 @@
     (def #_"map" Compiler'macros
         (cons-map
             'about      (fn [& s]   (cons 'do s))
-            'declare    (fn [x]     (list 'def x))
+            'declare    (fn [x]     (list 'def x nil))
             'when       (fn [? & s] (list 'if ? (cons 'do s) nil))
             'cond       (fn [& s]   (when s (list 'if (first s) (second s) (cons 'cond (next (next s))))))
             'and        (fn [& s]   (if s (let [x (first s) s (next s)] (if s (list 'let (list '&and x) (list 'if '&and (cons 'and s) '&and)) x)) true))
@@ -1197,43 +1175,43 @@
                         )]
                     (if (some? o)
                         (VarExpr'new o)
-                        (-/throw! (str "unable to resolve symbol: " sym " in this context"))
+                        (-/throw! (str "unable to resolve symbol: " sym))
                     )
                 )
             )
         )
     )
 
-    (defn #_"Expr" Compiler'analyzeSeq [#_"seq" form, #_"Context" context, #_"map" scope]
+    (defn #_"Expr" Compiler'analyzeSeq [#_"seq" form, #_"map" scope]
         (let [#_"edn" me (Compiler'macroexpand1 form, scope)]
             (if (#_= identical? me form)
                 (let [#_"any" op (first form)]
                     (if (some? op)
                         (let [#_"fn" f'parse (or (get Compiler'specials op) InvokeExpr'parse)]
-                            (f'parse form, context, scope)
+                            (f'parse form, scope)
                         )
                         (-/throw! (str "can't call nil, form: " form))
                     )
                 )
-                (Compiler'analyze me, context, scope)
+                (Compiler'analyze me, scope)
             )
         )
     )
 
-    (defn #_"Expr" Compiler'analyze [#_"edn" form, #_"Context" context, #_"map" scope]
+    (defn #_"Expr" Compiler'analyze [#_"edn" form, #_"map" scope]
         (cond
             (= form nil)                           LiteralExpr'NIL
             (= form true)                          LiteralExpr'TRUE
             (= form false)                         LiteralExpr'FALSE
             (or (symbol? form) (-/-symbol? form)) (Compiler'analyzeSymbol form, scope)
-            (and (seq? form) (seq form))          (Compiler'analyzeSeq form, context, scope)
+            (and (seq? form) (seq form))          (Compiler'analyzeSeq form, scope)
             :else                                 (LiteralExpr'new form)
         )
     )
 
     (defn #_"edn" Compiler'eval [#_"edn" form, #_"map" scope]
         (let [form (Compiler'macroexpand form, scope)]
-            (apply (Lambda'new (Compiler'analyze (list (symbol! 'fn) [] form), :Context'EXPRESSION, scope), nil) nil)
+            (apply (Lambda'new (Compiler'analyze (list (symbol! 'fn) [] form), scope), nil) nil)
         )
     )
 )
