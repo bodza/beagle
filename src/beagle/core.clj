@@ -94,17 +94,20 @@
 
 (-/refer! beagle.bore [-> -= Appendable''append Flushable''flush Integer'parseInt Matcher''matches Namespace''findInternedVar Pattern''matcher Pattern'compile PushbackReader''unread Reader''read StringBuilder''append StringBuilder''toString StringBuilder'new System'in System'out Var''-get -aget -alength and -apply -array? -aset -boolean? -char -char? cond -conj cons -first -fn? identical? -int -keyword? list -name -namespace -neg? -next -number? -object-array or -seq -seq? -seqable? -str -string? -symbol -symbol? -the-ns throw! -var?])
 
-(-/defmacro about   [& s] (-/cons 'do s))
-(-/defmacro declare [x]   (-/list 'def x nil))
+(-/defmacro about   [& s]   (-/cons 'do s))
+(-/defmacro declare [x]     (-/list 'def x nil))
 (-/defmacro when    [? & s] (-/list 'if ? (-/cons 'do s) nil))
 
 (-/defmacro fn   [& s] (-/cons 'fn* s))
 (-/defmacro let  [& s] (-/cons 'let* s))
 (-/defmacro loop [& s] (-/cons 'loop* s))
 
-(-/defmacro defn [f & s] (-/list 'def f (-/cons 'fn s)))
+(-/defmacro defn     [f & s] (-/list 'def f (-/cons 'fn s)))
+(-/defmacro lazy-seq [& s]   (-/cons 'fn (-/cons [] s)))
 
 (def identical? -/identical?)
+
+(defn identity [x] x)
 
 (defn nil?   [x] (identical? x nil))
 (defn true?  [x] (identical? x true))
@@ -127,11 +130,14 @@
 (about #_"seq"
     (declare cons?)
     (declare Cons''seq)
+    (declare closure?)
+    (declare Closure''seq)
 
     (defn seq [s]
         (cond
             (nil? s)         nil
             (cons? s)        (Cons''seq s)
+            (closure? s)     (Closure''seq s)
             (-/-seqable? s)  (-/-seq s)
             :else            (-/throw! "seq not supported on " s)
         )
@@ -279,6 +285,7 @@
             (symbol? x)    (append-sym a x)
             (cons? x)      (append-seq a x)
             (atom? x)      (-/Appendable''append a, "atom")
+            (closure? x)   (-/Appendable''append a, "closure")
             :else          (-/Appendable''append a, "object")
         )
     )
@@ -300,7 +307,7 @@
 
     (defn space   [] (-/Appendable''append -/System'out (-/-char Unicode'space))   nil)
     (defn newline [] (-/Appendable''append -/System'out (-/-char Unicode'newline)) nil)
-    (defn flush   [] (-/Flushable''flush   -/System'out)                          nil)
+    (defn flush   [] (-/Flushable''flush   -/System'out)                           nil)
 
     (defn pr [& s]
         (when (some? s)
@@ -337,13 +344,11 @@
 (about #_"beagle.Atom"
 
 (about #_"Atom"
-    (defn Atom'meta [] )
-
     (defn #_"Atom" Atom'new [#_"any" init]
-        (-> (anew 2) (aset! 0 Atom'meta) (volatile-aset! 1 init))
+        (-> (anew 2) (aset! 0 "Atom'meta") (volatile-aset! 1 init))
     )
 
-    (defn atom? [x] (and (-/-array? x) (= (alength x) 2) (identical? (aget x 0) Atom'meta)))
+    (defn atom? [x] (and (-/-array? x) (= (alength x) 2) (= (aget x 0) "Atom'meta")))
 
     (defn #_"any" Atom''deref [#_"Atom" this]
         (volatile-aget this 1)
@@ -409,13 +414,11 @@
 (about #_"beagle.Cons"
 
 (about #_"Cons"
-    (defn Cons'meta [] )
-
     (defn #_"Cons" Cons'new [#_"any" car, #_"seq" cdr]
-        (-> (anew 3) (aset! 0 Cons'meta) (aset! 1 car) (aset! 2 cdr))
+        (-> (anew 3) (aset! 0 "Cons'meta") (aset! 1 car) (aset! 2 cdr))
     )
 
-    (defn cons? [x] (and (-/-array? x) (= (alength x) 3) (identical? (aget x 0) Cons'meta)))
+    (defn cons? [x] (and (-/-array? x) (= (alength x) 3) (= (aget x 0) "Cons'meta")))
 
     (defn #_"any" Cons''car [#_"Cons" this] (when (cons? this) (aget this 1)))
     (defn #_"seq" Cons''cdr [#_"Cons" this] (when (cons? this) (aget this 2)))
@@ -443,15 +446,15 @@
     )
 )
 
-(defn cons [x s] (Cons'new x, (seq s)))
+(defn cons [x s] (Cons'new x, (#_seq identity s)))
 
 (defn conj [s x] (cons x s))
 
 (defn spread [s]
     (cond
-        (nil? s) nil
+        (nil? s)        nil
         (nil? (next s)) (seq (first s))
-        :else (cons (first s) (spread (next s)))
+        :else           (cons (first s) (spread (next s)))
     )
 )
 
@@ -462,8 +465,20 @@
 (defn reverse! [s] (reduce -/-conj (-/list) s))
 
 (defn some [f s]
-    (when (seq s)
-        (or (f (first s)) (#_recur some f (next s)))
+    (let [s (seq s)]
+        (when (some? s)
+            (or (f (first s)) (#_recur some f (next s)))
+        )
+    )
+)
+
+(defn map [f s]
+    (lazy-seq
+        (let [s (seq s)]
+            (when (some? s)
+                (cons (f (first s)) (map f (next s)))
+            )
+        )
     )
 )
 )
@@ -545,21 +560,19 @@
 (about #_"beagle.Symbol"
 
 (about #_"Symbol"
-    (defn Symbol'meta [] )
-
     (defn #_"Symbol" Symbol'new [#_"String" ns, #_"String" name]
         (cons-map
-            #_"meta" :meta Symbol'meta
+            #_"meta" :meta "Symbol'meta"
             #_"String" :ns ns
             #_"String" :name name
         )
     )
 
-    (defn symbol? [x] (and (cons? x) (identical? (get x :meta) Symbol'meta)))
+    (defn symbol? [x] (and (cons? x) (= (get x :meta) "Symbol'meta")))
 
     (defn #_"Symbol" Symbol'intern [#_"String" name]
         (if (and (= (-/-int (first name)) Unicode'minus) (= (-/-int (second name)) Unicode'slash))
-            (Symbol'new "-", (apply str (next (next name))))
+            (Symbol'new "-", (apply -/-str (next (next name))))
             (Symbol'new nil, name)
         )
     )
@@ -609,7 +622,7 @@
     (defn #_"seq" Code''get      [#_"seq" code, #_"Symbol" name]            (cons [:get name] code))
     (defn #_"seq" Code''if       [#_"seq" code, #_"seq" then, #_"seq" else] (cons [:if then else] code))
     (defn #_"seq" Code''pop      [#_"seq" code]                             (cons [:pop] code))
-    (defn #_"seq" Code''push     [#_"seq" code, #_"value" value]            (cons [:push value] code))
+    (defn #_"seq" Code''push     [#_"seq" code, #_"any" value]              (cons [:push value] code))
     (defn #_"seq" Code''var-get  [#_"seq" code, #_"Var" var]                (cons [:var-get var] code))
     (defn #_"seq" Code''var-set! [#_"seq" code, #_"Var" var]                (cons [:var-set! var] code))
 )
@@ -617,24 +630,21 @@
 (about #_"beagle.Closure"
 
 (about #_"Closure"
-    (defn Closure'meta [] )
-
     (defn #_"Closure" Closure'new [#_"FnExpr" fun, #_"map" env]
-        (cons-map
-            #_"meta" :meta Closure'meta
-            #_"FnExpr" :fun fun
-            #_"map" :env env
-        )
+        (-> (anew 3) (aset! 0 "Closure'meta") (aset! 1 fun) (aset! 2 env))
     )
 
-    (defn closure? [x] (and (cons? x) (identical? (get x :meta) Closure'meta)))
+    (defn closure? [x] (and (-/-array? x) (= (alength x) 3) (= (aget x 0) "Closure'meta")))
+
+    (defn #_"FnExpr" Closure''fun [#_"Closure" this] (when (closure? this) (aget this 1)))
+    (defn #_"map"    Closure''env [#_"Closure" this] (when (closure? this) (aget this 2)))
 
     (declare Code''emit)
     (declare Machine'compute)
 
     (defn #_"any" Closure''applyTo [#_"Closure" this, #_"seq" args]
         (let [
-            #_"FnExpr" fun (get this :fun) #_"map" env (get this :env)
+            #_"FnExpr" fun (Closure''fun this) #_"map" env (Closure''env this)
             env
                 (let [#_"Symbol" x (get fun :self)]
                     (if (some? x) (assoc env x this) env)
@@ -653,6 +663,10 @@
             (Machine'compute code, env)
         )
     )
+
+    (defn #_"seq" Closure''seq [#_"Closure" this]
+        (cons (Closure''applyTo this, nil) nil)
+    )
 )
 
 (defn apply [f & s]
@@ -668,11 +682,9 @@
 )
 
 (about #_"LiteralExpr"
-    (defn LiteralExpr'meta [] )
-
     (defn #_"LiteralExpr" LiteralExpr'new [#_"any" value]
         (cons-map
-            #_"meta" :meta LiteralExpr'meta
+            #_"meta" :meta "LiteralExpr'meta"
             #_"any" :value value
         )
     )
@@ -702,11 +714,9 @@
 )
 
 (about #_"VarExpr"
-    (defn VarExpr'meta [] )
-
     (defn #_"VarExpr" VarExpr'new [#_"Var" var]
         (cons-map
-            #_"meta" :meta VarExpr'meta
+            #_"meta" :meta "VarExpr'meta"
             #_"Var" :var var
         )
     )
@@ -717,11 +727,9 @@
 )
 
 (about #_"BodyExpr"
-    (defn BodyExpr'meta [] )
-
     (defn #_"BodyExpr" BodyExpr'new [#_"Expr*" exprs]
         (cons-map
-            #_"meta" :meta BodyExpr'meta
+            #_"meta" :meta "BodyExpr'meta"
             #_"Expr*" :exprs exprs
         )
     )
@@ -757,11 +765,9 @@
 )
 
 (about #_"IfExpr"
-    (defn IfExpr'meta [] )
-
     (defn #_"IfExpr" IfExpr'new [#_"Expr" test, #_"Expr" then, #_"Expr" else]
         (cons-map
-            #_"meta" :meta IfExpr'meta
+            #_"meta" :meta "IfExpr'meta"
             #_"Expr" :test test
             #_"Expr" :then then
             #_"Expr" :else else
@@ -794,11 +800,9 @@
 )
 
 (about #_"InvokeExpr"
-    (defn InvokeExpr'meta [] )
-
     (defn #_"InvokeExpr" InvokeExpr'new [#_"Expr" fexpr, #_"Expr*" rargs]
         (cons-map
-            #_"meta" :meta InvokeExpr'meta
+            #_"meta" :meta "InvokeExpr'meta"
             #_"Expr" :fexpr fexpr
             #_"Expr*" :rargs rargs
         )
@@ -837,11 +841,9 @@
 )
 
 (about #_"BindingExpr"
-    (defn BindingExpr'meta [] )
-
     (defn #_"BindingExpr" BindingExpr'new [#_"Symbol" sym]
         (cons-map
-            #_"meta" :meta BindingExpr'meta
+            #_"meta" :meta "BindingExpr'meta"
             #_"Symbol" :sym sym
         )
     )
@@ -852,11 +854,9 @@
 )
 
 (about #_"FnExpr"
-    (defn FnExpr'meta [] )
-
     (defn #_"FnExpr" FnExpr'new [#_"Symbol" self]
         (cons-map
-            #_"meta" :meta FnExpr'meta
+            #_"meta" :meta "FnExpr'meta"
             #_"Symbol" :self self
             #_"Symbol*" :pars nil
             #_"Symbol" :etal nil
@@ -923,11 +923,9 @@
 )
 
 (about #_"DefExpr"
-    (defn DefExpr'meta [] )
-
     (defn #_"DefExpr" DefExpr'new [#_"Var" var, #_"Expr" init]
         (cons-map
-            #_"meta" :meta DefExpr'meta
+            #_"meta" :meta "DefExpr'meta"
             #_"Var" :var var
             #_"Expr" :init init
         )
@@ -975,15 +973,15 @@
     (defn #_"seq" Code''emit [#_"seq" code, #_"Expr" expr]
         (let [#_"meta" m (get expr :meta)]
             (cond
-                (identical? m LiteralExpr'meta) (LiteralExpr''emit expr, code)
-                (identical? m VarExpr'meta)     (VarExpr''emit expr, code)
-                (identical? m BodyExpr'meta)    (BodyExpr''emit expr, code)
-                (identical? m IfExpr'meta)      (IfExpr''emit expr, code)
-                (identical? m InvokeExpr'meta)  (InvokeExpr''emit expr, code)
-                (identical? m BindingExpr'meta) (BindingExpr''emit expr, code)
-                (identical? m FnExpr'meta)      (FnExpr''emit expr, code)
-                (identical? m DefExpr'meta)     (DefExpr''emit expr, code)
-                :else                           (-/throw! "Code''emit not supported on " expr)
+                (= m "LiteralExpr'meta") (LiteralExpr''emit expr, code)
+                (= m "VarExpr'meta")     (VarExpr''emit expr, code)
+                (= m "BodyExpr'meta")    (BodyExpr''emit expr, code)
+                (= m "IfExpr'meta")      (IfExpr''emit expr, code)
+                (= m "InvokeExpr'meta")  (InvokeExpr''emit expr, code)
+                (= m "BindingExpr'meta") (BindingExpr''emit expr, code)
+                (= m "FnExpr'meta")      (FnExpr''emit expr, code)
+                (= m "DefExpr'meta")     (DefExpr''emit expr, code)
+                :else                    (-/throw! "Code''emit not supported on " expr)
             )
         )
     )
@@ -1014,6 +1012,7 @@
             'let        (fn [a & s] (if (seq a) (list (list 'fn (list (first a)) (cons 'let (cons (next (next a)) s))) (second a)) (cons 'do s)))
             'loop       (fn [a & s] (cons (cons 'fn (cons 'recur (cons (Cons''keys a) s))) (Cons''vals a)))
             'defn       (fn [f & s] (list 'def f (cons 'fn s)))
+            'lazy-seq   (fn [& s]   (cons 'fn (cons [] s)))
         )
     )
 
@@ -1204,7 +1203,7 @@
         )
     )
 
-    #_"\n !\"#%&'()*,-./0123456789:=>?ABCDEFHILMNOPRSTUVWZ[\\]_abcdefghijklmnopqrstuvwxyz|ζ"
+    #_"\n !\"#%&'()*,-./0123456789:=>?ABCDEFHILMNOPRSTUVWZ[\\]_abcdefghijklmnopqrstuvwxyz|ζ"
 
     (def #_"Pattern" LispReader'rxSymbol (-/Pattern'compile "(?:-/)?[-:a-zA-Z_*?!=>&%ζ][-:a-zA-Z_*?!=>&%0-9'#]*"))
 
@@ -1246,7 +1245,7 @@
         )
     )
 
-    (defn #_"any" LispReader'READ_FINISHED [] )
+    (def #_"any" LispReader'READ_FINISHED (anew 0))
 
     (defn #_"seq" LispReader'readDelimitedForms [#_"PushbackReader" r, #_"seq" scope, #_"unicode" delim]
         (loop [#_"seq" z nil]
@@ -1351,7 +1350,7 @@
 )
 
 (defn repl []
-    (let [esc (-/-char Unicode'escape)] (print (str esc "[31mBeagle " esc "[32m=> " esc "[0m")))
+    (let [esc (-/-char Unicode'escape)] (print (-/-str esc "[31mBeagle " esc "[32m=> " esc "[0m")))
     (flush)
     (-> (read) (eval) (prn))
     (#_recur repl)
