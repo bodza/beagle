@@ -3,7 +3,7 @@
 )
 
 (ns beagle.bore
-    (:refer-clojure :only [*in* *ns* *out* = aget alength apply aset boolean? char char? class conj defn doseq first fn fn? import inc int keys let map merge meta neg? next ns-imports ns-resolve ns-unmap number? object-array select-keys seq seq? seqable? some? str string? symbol symbol? the-ns var? var-get vary-meta])
+    (:refer-clojure :only [*in* *ns* *out* = aget alength apply aset char char? class conj defn doseq first fn fn? import int keys let map merge meta neg? next ns-imports ns-resolve ns-unmap number? object-array select-keys seq seq? seqable? some? str string? symbol symbol? the-ns var? var-get vary-meta])
     (:require [clojure.core :as -])
 )
 
@@ -22,7 +22,7 @@
     )
 )
 
-(refer! clojure.core [-> and cond cons defmacro identical? list or])
+(refer! clojure.core [-> and cond cons defmacro identical? list memoize or])
 
 (defn throw! [& s] (throw (Error. (apply str s))))
 
@@ -61,7 +61,6 @@
 (defn -array? [x] (and (some? x) (.isArray (class x))))
 
 (def -aset         aset)
-(def -boolean?     boolean?)
 (def -char         char)
 (def -char?        char?)
 (def -conj         conj)
@@ -89,7 +88,7 @@
 
 (-/import!)
 
-(-/refer! beagle.bore [-> -= Appendable''append Flushable''flush Integer'parseInt Matcher''matches Namespace''findInternedVar Pattern''matcher Pattern'compile PushbackReader''unread Reader''read StringBuilder''append StringBuilder''toString StringBuilder'new System'in System'out Var''-get -aget -alength and -apply -array? -aset -boolean? -char -char? cond -conj cons -first -fn? identical? -int list -neg? -next -number? -object-array or -seq -seq? -seqable? -str -string? -symbol -symbol? -the-ns throw! -var?])
+(-/refer! beagle.bore [-> -= Appendable''append Flushable''flush Integer'parseInt Matcher''matches Namespace''findInternedVar Pattern''matcher Pattern'compile PushbackReader''unread Reader''read StringBuilder''append StringBuilder''toString StringBuilder'new System'in System'out Var''-get -aget -alength and -apply -array? -aset -char -char? cond -conj cons -first -fn? identical? -int list -neg? -next -number? -object-array or -seq -seq? -seqable? -str -string? -symbol -the-ns throw! -var?])
 
 (-/defmacro about   [& s]   (-/cons 'do s))
 (-/defmacro declare [x]     (-/list 'def x nil))
@@ -101,6 +100,9 @@
 
 (-/defmacro defn     [f & s] (-/list 'def f (-/cons 'fn s)))
 (-/defmacro lazy-seq [& s]   (-/cons 'fn (-/cons [] s)))
+
+(defn memoize  [x] x)
+(defn -symbol? [x] false)
 
 (def identical? -/identical?)
 
@@ -133,10 +135,11 @@
     (defn seq [s]
         (cond
             (nil? s)         nil
-            (cons? s)        (Cons''seq s)
-            (closure? s)     (Closure''seq s)
-            (-/-seqable? s)  (-/-seq s)
-            'else            (-/throw! "seq not supported on " s)
+            (cons? s)       (Cons''seq s)
+            (closure? s)    (Closure''seq s)
+            (-/-seqable? s) (-/-seq s)
+            (-/-fn? s)      (-/-apply s nil)
+            'else           (-/throw! "seq not supported on " s)
         )
     )
 
@@ -145,7 +148,7 @@
     (defn first [s]
         (let [s (seq s)]
             (cond
-                (nil? s)    nil
+                (nil? s)     nil
                 (cons? s)   (Cons''first s)
                 (-/-seq? s) (-/-first s)
                 'else       (-/throw! "first not supported on " s)
@@ -158,7 +161,7 @@
     (defn next [s]
         (let [s (seq s)]
             (cond
-                (nil? s)    nil
+                (nil? s)     nil
                 (cons? s)   (Cons''next s)
                 (-/-seq? s) (-/-next s)
                 'else       (-/throw! "next not supported on " s)
@@ -214,7 +217,7 @@
 
     (declare =)
 
-    (defn atom? [x] (and (-/-array? x) (= (alength x) 2) (= (aget x 0) "Atom'meta")))
+    (defn atom? [x] (and (-/-array? x) (-/-= (alength x) 2) (-/-= (aget x 0) "Atom'meta")))
 
     (defn #_"any" Atom''deref [#_"Atom" this]
         (volatile-aget this 1)
@@ -267,7 +270,7 @@
         (-> (anew 3) (aset! 0 "Cons'meta") (aset! 1 car) (aset! 2 cdr))
     )
 
-    (defn cons? [x] (and (-/-array? x) (= (alength x) 3) (= (aget x 0) "Cons'meta")))
+    (defn cons? [x] (and (-/-array? x) (-/-= (alength x) 3) (-/-= (aget x 0) "Cons'meta")))
 
     (defn #_"any" Cons''car [#_"Cons" this] (when (cons? this) (aget this 1)))
     (defn #_"seq" Cons''cdr [#_"Cons" this] (when (cons? this) (aget this 2)))
@@ -299,7 +302,7 @@
 
 (defn spread [s]
     (cond
-        (nil? s)        nil
+        (nil? s)         nil
         (nil? (next s)) (seq (first s))
         'else           (cons (first s) (spread (next s)))
     )
@@ -365,19 +368,21 @@
     )
 
     (defn #_"seq" ConsMap''keys [#_"ConsMap" this]
-        (loop [#_"seq" z nil #_"seq" s (seq this)]
-            (if (some? s)
-                (recur (cons (first s) z) (next (next s)))
-                (reverse z)
+        (lazy-seq
+            (let [#_"seq" s (seq this)]
+                (when (some? s)
+                    (cons (first s) (ConsMap''keys (next (next s))))
+                )
             )
         )
     )
 
     (defn #_"seq" ConsMap''vals [#_"ConsMap" this]
-        (loop [#_"seq" z nil #_"seq" s (seq this)]
-            (if (some? s)
-                (recur (cons (second s) z) (next (next s)))
-                (reverse z)
+        (lazy-seq
+            (let [#_"seq" s (seq this)]
+                (when (some? s)
+                    (cons (second s) (ConsMap''vals (next (next s))))
+                )
             )
         )
     )
@@ -395,7 +400,7 @@
 
 (defn contains? [m k]
     (cond
-        (nil? m)  false
+        (nil? m)   false
         (cons? m) (ConsMap''contains? m, k)
         'else     (-/throw! "contains? not supported on " m)
     )
@@ -403,7 +408,7 @@
 
 (defn get [m k]
     (cond
-        (nil? m)  nil
+        (nil? m)   nil
         (cons? m) (ConsMap''get m, k)
         'else     (-/throw! "get not supported on " m)
     )
@@ -419,7 +424,7 @@
         (-> (anew 3) (aset! 0 "Symbol'meta") (aset! 1 ns) (aset! 2 name))
     )
 
-    (defn symbol? [x] (and (-/-array? x) (= (alength x) 3) (= (aget x 0) "Symbol'meta")))
+    (defn symbol? [x] (and (-/-array? x) (-/-= (alength x) 3) (-/-= (aget x 0) "Symbol'meta")))
 
     (defn #_"String" Symbol''ns   [#_"Symbol" this] (when (symbol? this) (aget this 1)))
     (defn #_"String" Symbol''name [#_"Symbol" this] (when (symbol? this) (aget this 2)))
@@ -430,6 +435,8 @@
             (Symbol'new nil, name)
         )
     )
+
+    (def Symbol'create (-/memoize Symbol'create))
 
     (defn #_"boolean" Symbol''equals [#_"Symbol" this, #_"any" that]
         (or (identical? this that)
@@ -453,7 +460,7 @@
         (-> (anew 3) (aset! 0 "Closure'meta") (aset! 1 fun) (aset! 2 env))
     )
 
-    (defn closure? [x] (and (-/-array? x) (= (alength x) 3) (= (aget x 0) "Closure'meta")))
+    (defn closure? [x] (and (-/-array? x) (-/-= (alength x) 3) (-/-= (aget x 0) "Closure'meta")))
 
     (defn #_"FnExpr" Closure''fun [#_"Closure" this] (when (closure? this) (aget this 1)))
     (defn #_"map"    Closure''env [#_"Closure" this] (when (closure? this) (aget this 2)))
@@ -484,7 +491,7 @@
     )
 
     (defn #_"seq" Closure''seq [#_"Closure" this]
-        (cons (Closure''applyTo this, nil) nil)
+        (Closure''applyTo this, nil)
     )
 )
 
@@ -524,11 +531,11 @@
     (cond
         (identical? x y)                 true
         (or (nil? x) (nil? y) (true? x) (true? y) (false? x) (false? y)) false
+        (or (-/-string? x) (-/-number? x) (-/-char? x)) (-/-= x y)
         (or (symbol? x) (-/-symbol? x)) (Symbol''equals (symbol! x), (symbol! y))
         (or (symbol? y) (-/-symbol? y)) (Symbol''equals (symbol! y), (symbol! x))
         (cons? x)                       (Cons''equals x, y)
         (cons? y)                       (Cons''equals y, x)
-        (or (-/-boolean? x) (-/-char? x) (-/-number? x) (-/-string? x)) (-/-= x y)
         'else                           (-/throw! "= not supported on " x ", not even on " y)
     )
 )
@@ -540,7 +547,7 @@
             (= (-/-int c) Unicode'newline)   "\\n"
             (= (-/-int c) Unicode'quotation) "\\\""
             (= (-/-int c) Unicode'backslash) "\\\\"
-            'else                           c
+            'else                            c
         )
     )
 
@@ -729,15 +736,9 @@
 
     (defn #_"Expr" BodyExpr'parse [#_"seq" form, #_"seq" scope]
         (let [
-            #_"Expr*" z
-                (loop [z nil #_"seq" s (next form)]
-                    (if (some? s)
-                        (recur (cons (Compiler'analyze (first s), scope) z) (next s))
-                        (reverse z)
-                    )
-                )
+            #_"Expr*" z (map (fn [%] (Compiler'analyze %, scope)) (next form))
         ]
-            (BodyExpr'new (or (#_seq identity z) (list LiteralExpr'NIL)))
+            (BodyExpr'new (or (seq z) (list LiteralExpr'NIL)))
         )
     )
 
