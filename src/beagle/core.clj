@@ -172,6 +172,7 @@
     (defn second [s] (first (next s)))
     (defn third  [s] (first (next (next s))))
     (defn fourth [s] (first (next (next (next s)))))
+    (defn fifth  [s] (first (next (next (next (next s))))))
 
     (defn reduce [f r s] (let [s (seq s)] (if (some? s) (#_recur reduce f (f r (first s)) (next s)) r)))
 
@@ -472,19 +473,19 @@
         (let [
             #_"FnExpr" fun (Closure''fun this) #_"map" env (Closure''env this)
             env
-                (let [#_"Symbol" x (get fun 'self)]
+                (let [#_"Symbol" x (second fun)]
                     (if (some? x) (assoc env x this) env)
                 )
             env
-                (loop [env env #_"seq" pars (seq (get fun 'pars)) args (seq args)]
+                (loop [env env #_"seq" pars (seq (third fun)) args (seq args)]
                     (if (some? pars)
                         (recur (assoc env (first pars) (first args)) (next pars) (next args))
-                        (let [#_"Symbol" x (get fun 'etal)]
+                        (let [#_"Symbol" x (fourth fun)]
                             (if (some? x) (assoc env x args) env)
                         )
                     )
                 )
-            #_"seq" code (-> nil (Code''emit (get fun 'body)) reverse)
+            #_"seq" code (-> nil (Code''emit (fifth fun)) reverse)
         ]
             (Machine'compute code, env)
         )
@@ -667,29 +668,10 @@
 
 (about #_"beagle.Compiler"
 
-(about #_"Code"
-    (defn #_"seq" Code''apply    [#_"seq" code]                             (cons (list 'apply) code))
-    (defn #_"seq" Code''cons     [#_"seq" code]                             (cons (list 'cons) code))
-    (defn #_"seq" Code''closure  [#_"seq" code, #_"FnExpr" fun]             (cons (list 'closure fun) code))
-    (defn #_"seq" Code''get      [#_"seq" code, #_"Symbol" name]            (cons (list 'get name) code))
-    (defn #_"seq" Code''if       [#_"seq" code, #_"seq" then, #_"seq" else] (cons (list 'if then else) code))
-    (defn #_"seq" Code''pop      [#_"seq" code]                             (cons (list 'pop) code))
-    (defn #_"seq" Code''push     [#_"seq" code, #_"any" value]              (cons (list 'push value) code))
-    (defn #_"seq" Code''var-get  [#_"seq" code, #_"Var" var]                (cons (list 'var-get var) code))
-    (defn #_"seq" Code''var-set! [#_"seq" code, #_"Var" var]                (cons (list 'var-set! var) code))
-)
-
 (about #_"LiteralExpr"
-    (defn #_"LiteralExpr" LiteralExpr'new [#_"any" value]
-        (cons-map
-            #_"meta" 'meta "LiteralExpr'meta"
-            #_"any" 'value value
-        )
-    )
-
-    (def #_"LiteralExpr" LiteralExpr'NIL   (LiteralExpr'new nil))
-    (def #_"LiteralExpr" LiteralExpr'TRUE  (LiteralExpr'new true))
-    (def #_"LiteralExpr" LiteralExpr'FALSE (LiteralExpr'new false))
+    (def #_"LiteralExpr" LiteralExpr'NIL   (list 'literal-expr nil))
+    (def #_"LiteralExpr" LiteralExpr'TRUE  (list 'literal-expr true))
+    (def #_"LiteralExpr" LiteralExpr'FALSE (list 'literal-expr false))
 
     (defn #_"Expr" LiteralExpr'parse [#_"seq" form, #_"seq" scope]
         (cond
@@ -701,70 +683,14 @@
                 (nil? x)    LiteralExpr'NIL
                 (true? x)   LiteralExpr'TRUE
                 (false? x)  LiteralExpr'FALSE
-                'else      (LiteralExpr'new x)
-            )
-        )
-    )
-
-    (defn #_"seq" LiteralExpr''emit [#_"LiteralExpr" this, #_"seq" code]
-        (Code''push code, (get this 'value))
-    )
-)
-
-(about #_"VarExpr"
-    (defn #_"VarExpr" VarExpr'new [#_"Var" var]
-        (cons-map
-            #_"meta" 'meta "VarExpr'meta"
-            #_"Var" 'var var
-        )
-    )
-
-    (defn #_"seq" VarExpr''emit [#_"VarExpr" this, #_"seq" code]
-        (Code''var-get code, (get this 'var))
-    )
-)
-
-(about #_"BodyExpr"
-    (defn #_"BodyExpr" BodyExpr'new [#_"Expr*" exprs]
-        (cons-map
-            #_"meta" 'meta "BodyExpr'meta"
-            #_"Expr*" 'exprs exprs
-        )
-    )
-
-    (declare Compiler'analyze)
-
-    (defn #_"Expr" BodyExpr'parse [#_"seq" form, #_"seq" scope]
-        (let [
-            #_"Expr*" z (map (fn [%] (Compiler'analyze %, scope)) (next form))
-        ]
-            (BodyExpr'new (or (seq z) (list LiteralExpr'NIL)))
-        )
-    )
-
-    (defn #_"seq" BodyExpr''emit [#_"BodyExpr" this, #_"seq" code]
-        (loop [code code #_"seq" s (seq (get this 'exprs))]
-            (let [
-                code (Code''emit code, (first s))
-            ]
-                (if (some? (next s))
-                    (recur (Code''pop code) (next s))
-                    code
-                )
+                'else      (list 'literal-expr x)
             )
         )
     )
 )
 
 (about #_"IfExpr"
-    (defn #_"IfExpr" IfExpr'new [#_"Expr" test, #_"Expr" then, #_"Expr" else]
-        (cons-map
-            #_"meta" 'meta "IfExpr'meta"
-            #_"Expr" 'test test
-            #_"Expr" 'then then
-            #_"Expr" 'else else
-        )
-    )
+    (declare Compiler'analyze)
 
     (defn #_"Expr" IfExpr'parse [#_"seq" form, #_"seq" scope]
         (cond
@@ -776,91 +702,38 @@
             #_"Expr" then (Compiler'analyze (third form), scope)
             #_"Expr" else (Compiler'analyze (fourth form), scope)
         ]
-            (IfExpr'new test, then, else)
-        )
-    )
-
-    (defn #_"seq" IfExpr''emit [#_"IfExpr" this, #_"seq" code]
-        (-> code
-            (Code''emit (get this 'test))
-            (Code''if
-                (-> nil (Code''emit (get this 'then)) reverse),
-                (-> nil (Code''emit (get this 'else)) reverse)
-            )
+            (list 'if-expr test then else)
         )
     )
 )
 
 (about #_"InvokeExpr"
-    (defn #_"InvokeExpr" InvokeExpr'new [#_"Expr" fexpr, #_"Expr*" rargs]
-        (cons-map
-            #_"meta" 'meta "InvokeExpr'meta"
-            #_"Expr" 'fexpr fexpr
-            #_"Expr*" 'rargs rargs
-        )
-    )
-
     (defn #_"Expr" InvokeExpr'parse [#_"seq" form, #_"seq" scope]
         (let [
             #_"Expr" fexpr (Compiler'analyze (first form), scope)
             #_"Expr*" rargs (reduce (fn [%1 %2] (conj %1 (Compiler'analyze %2, scope))) nil (next form))
         ]
-            (InvokeExpr'new fexpr, rargs)
-        )
-    )
-
-    (defn #_"seq" InvokeExpr'emitArgs [#_"seq" code, #_"Expr*" rargs]
-        (loop [code (Code''push code, nil) #_"seq" s (seq rargs)]
-            (if (some? s)
-                (let [
-                    code (Code''emit code, (first s))
-                    code (Code''cons code)
-                ]
-                    (recur code (next s))
-                )
-                code
-            )
-        )
-    )
-
-    (defn #_"seq" InvokeExpr''emit [#_"InvokeExpr" this, #_"seq" code]
-        (-> code
-            (Code''emit (get this 'fexpr))
-            (InvokeExpr'emitArgs (get this 'rargs))
-            (Code''apply)
+            (list 'invoke-expr fexpr rargs)
         )
     )
 )
 
-(about #_"BindingExpr"
-    (defn #_"BindingExpr" BindingExpr'new [#_"Symbol" sym]
-        (cons-map
-            #_"meta" 'meta "BindingExpr'meta"
-            #_"Symbol" 'sym sym
+(about #_"BodyExpr"
+    (defn #_"Expr" BodyExpr'parse [#_"seq" form, #_"seq" scope]
+        (let [
+            #_"Expr*" z (map (fn [%] (Compiler'analyze %, scope)) (next form))
+        ]
+            (list 'body-expr (or (seq z) (list LiteralExpr'NIL)))
         )
-    )
-
-    (defn #_"seq" BindingExpr''emit [#_"BindingExpr" this, #_"seq" code]
-        (Code''get code, (get this 'sym))
     )
 )
 
 (about #_"FnExpr"
-    (defn #_"FnExpr" FnExpr'new [#_"Symbol" self]
-        (cons-map
-            #_"meta" 'meta "FnExpr'meta"
-            #_"Symbol" 'self self
-            #_"Symbol*" 'pars nil
-            #_"Symbol" 'etal nil
-            #_"Expr" 'body nil
-        )
-    )
-
     (defn #_"FnExpr" FnExpr'parse [#_"seq" form, #_"seq" scope]
         (let [
             #_"symbol?" name (symbol! (second form)) ? (symbol? name) name (when ? name) form (if ? (next (next form)) (next form))
-            #_"FnExpr" fun
-                (loop [fun (FnExpr'new name) #_"boolean" variadic? false #_"seq" s (seq (first form))]
+            #_"map" fun
+                (loop [fun (cons-map 'self name) #_"boolean" variadic? false #_"seq" s (seq (first form))]
                     (if (some? s)
                         (let [#_"symbol?" sym (symbol! (first s))]
                             (if (symbol? sym)
@@ -894,33 +767,22 @@
                     (if (some? x) (cons x scope) scope)
                 )
             scope
-                (loop [scope scope #_"seq" pars (seq (get fun 'pars))]
-                    (if (some? pars)
-                        (recur (cons (first pars) scope) (next pars))
+                (loop [scope scope #_"seq" s (seq (get fun 'pars))]
+                    (if (some? s)
+                        (recur (cons (first s) scope) (next s))
                         (let [#_"Symbol" x (get fun 'etal)]
                             (if (some? x) (cons x scope) scope)
                         )
                     )
                 )
+            fun (assoc fun 'body (BodyExpr'parse (cons 'do (next form)), scope))
         ]
-            (assoc fun 'body (BodyExpr'parse (cons 'do (next form)), scope))
+            (list 'fn-expr (get fun 'self) (get fun 'pars) (get fun 'etal) (get fun 'body))
         )
-    )
-
-    (defn #_"seq" FnExpr''emit [#_"FnExpr" this, #_"seq" code]
-        (Code''closure code, this)
     )
 )
 
 (about #_"DefExpr"
-    (defn #_"DefExpr" DefExpr'new [#_"Var" var, #_"Expr" init]
-        (cons-map
-            #_"meta" 'meta "DefExpr'meta"
-            #_"Var" 'var var
-            #_"Expr" 'init init
-        )
-    )
-
     (def #_"map'" Beagle'ns (atom nil))
 
     (defn #_"Var" DefExpr'lookupVar [#_"Symbol" sym]
@@ -943,33 +805,44 @@
         )
         (let [#_"symbol?" s (symbol! (second form))]
             (if (symbol? s)
-                (DefExpr'new (DefExpr'lookupVar s), (Compiler'analyze (third form), scope))
+                (list 'def-expr (DefExpr'lookupVar s) (Compiler'analyze (third form), scope))
                 (-/throw! "first argument to def must be a symbol")
             )
-        )
-    )
-
-    (defn #_"seq" DefExpr''emit [#_"DefExpr" this, #_"seq" code]
-        (-> code
-            (Code''emit (get this 'init))
-            (Code''var-set! (get this 'var))
         )
     )
 )
 
 (about #_"Code"
+    (defn #_"seq" Code''emitArgs [#_"seq" code, #_"Expr*" rargs]
+        (loop [code (conj code (list 'push nil)) #_"seq" s (seq rargs)]
+            (if (some? s)
+                (recur (conj code (list 'cons (-> nil (Code''emit, (first s)) reverse))) (next s))
+                code
+            )
+        )
+    )
+
     (defn #_"seq" Code''emit [#_"seq" code, #_"Expr" expr]
-        (let [#_"meta" m (get expr 'meta)]
+        (let [#_"Symbol" x (first expr)]
             (cond
-                (= m "LiteralExpr'meta") (LiteralExpr''emit expr, code)
-                (= m "VarExpr'meta")     (VarExpr''emit expr, code)
-                (= m "BodyExpr'meta")    (BodyExpr''emit expr, code)
-                (= m "IfExpr'meta")      (IfExpr''emit expr, code)
-                (= m "InvokeExpr'meta")  (InvokeExpr''emit expr, code)
-                (= m "BindingExpr'meta") (BindingExpr''emit expr, code)
-                (= m "FnExpr'meta")      (FnExpr''emit expr, code)
-                (= m "DefExpr'meta")     (DefExpr''emit expr, code)
-                'else                    (-/throw! "Code''emit not supported on " expr)
+                (= x 'literal-expr) (conj code (list 'push (second expr)))
+                (= x 'binding-expr) (conj code (list 'get (second expr)))
+                (= x 'var-expr)     (conj code (list 'var-get (second expr)))
+                (= x 'if-expr)      (conj code (list 'if (-> nil (Code''emit (second expr)) reverse) (-> nil (Code''emit (third expr)) reverse) (-> nil (Code''emit (fourth expr)) reverse)))
+                (= x 'invoke-expr)  (conj code (list 'apply (-> nil (Code''emit (second expr)) reverse) (-> nil (Code''emitArgs (third expr)) reverse)))
+                (= x 'body-expr)    (loop [code code #_"seq" s (seq (second expr))]
+                                        (let [
+                                            code (Code''emit code, (first s))
+                                        ]
+                                            (if (some? (next s))
+                                                (recur (conj code (list 'pop)) (next s))
+                                                code
+                                            )
+                                        )
+                                    )
+                (= x 'fn-expr)      (conj code (list 'closure expr))
+                (= x 'def-expr)     (conj code (list 'var-set! (second expr) (-> nil (Code''emit (third expr)) reverse)))
+                'else (-/throw! "Code''emit not supported on " expr)
             )
         )
     )
@@ -1021,7 +894,7 @@
     (defn #_"Expr" Compiler'analyzeSymbol [#_"Symbol" sym, #_"seq" scope]
         (or
             (when (and (nil? (Symbol''ns sym)) (some (fn [%] (= % sym)) scope))
-                (BindingExpr'new sym)
+                (list 'binding-expr sym)
             )
             (let [#_"any" o
                     (if (some? (Symbol''ns sym))
@@ -1029,7 +902,7 @@
                         (get (deref Beagle'ns) sym)
                     )]
                 (if (some? o)
-                    (VarExpr'new o)
+                    (list 'var-expr o)
                     (-/throw! "unable to resolve symbol " sym)
                 )
             )
@@ -1059,7 +932,7 @@
             (false? form)                                         LiteralExpr'FALSE
             (or (symbol? form) (-/-symbol? form))                (Compiler'analyzeSymbol (symbol! form), scope)
             (or (cons? form) (and (-/-seq? form) (-/-seq form))) (Compiler'analyzeSeq form, scope)
-            'else                                                (LiteralExpr'new form)
+            'else                                                (list 'literal-expr form)
         )
     )
 
@@ -1077,17 +950,17 @@
     (defn #_"any" Machine'compute [#_"seq" code, #_"map" env]
         (loop [#_"stack" s nil code (seq code)]
             (if (some? code)
-                (let [xyz (first code) x (first xyz) y (second xyz) z (third xyz)]
+                (let [_ (first code) f (first _) x (second _) y (third _) z (fourth _)]
                     (cond
-                        (= x 'apply)    (let [b (first s) a (second s) s (next (next s))] (recur (cons (apply a b) s)                       (next code)))
-                        (= x 'cons)     (let [b (first s) a (second s) s (next (next s))] (recur (cons (cons b a) s)                        (next code)))
-                        (= x 'get)                                                        (recur (cons (get env y) s)                       (next code))
-                        (= x 'if)       (let [a (first s)              s (next s)]        (recur (cons (Machine'compute (if a y z), env) s) (next code)))
-                        (= x 'closure)                                                    (recur (cons (Closure'new y, env) s)              (next code))
-                        (= x 'pop)                                                        (recur (next s)                                   (next code))
-                        (= x 'push)                                                       (recur (cons y s)                                 (next code))
-                        (= x 'var-get)                                                    (recur (cons (Var''get y) s)                      (next code))
-                        (= x 'var-set!) (let [a (first s)              s (next s)]        (recur (cons (Var''bindRoot y, a) s)              (next code)))
+                        (= f 'apply)                                  (recur (cons (apply (Machine'compute x, env) (Machine'compute y, env)) s) (next code))
+                        (= f 'cons)     (let [a (first s) s (next s)] (recur (cons (cons (Machine'compute x, env) a) s)                         (next code)))
+                        (= f 'get)                                    (recur (cons (get env x) s)                                               (next code))
+                        (= f 'if)                                     (recur (cons (Machine'compute (if (Machine'compute x, env) y z), env) s)  (next code))
+                        (= f 'closure)                                (recur (cons (Closure'new x, env) s)                                      (next code))
+                        (= f 'pop)                                    (recur (next s)                                                           (next code))
+                        (= f 'push)                                   (recur (cons x s)                                                         (next code))
+                        (= f 'var-get)                                (recur (cons (Var''get x) s)                                              (next code))
+                        (= f 'var-set!)                               (recur (cons (Var''bindRoot x, (Machine'compute y, env)) s)               (next code))
                     )
                 )
                 (first s)
