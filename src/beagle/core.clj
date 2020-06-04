@@ -3,7 +3,7 @@
 )
 
 (ns beagle.bore
-    (:refer-clojure :only [*in* *ns* *out* = aget alength apply aset char char? class conj defn doseq first fn fn? import int keys let map merge meta neg? next ns-imports ns-resolve ns-unmap number? object-array select-keys seq seq? seqable? some? str string? symbol symbol? the-ns var? var-get vary-meta])
+    (:refer-clojure :only [*in* *ns* *out* = aget apply aset char char? class conj defn doseq first fn fn? import int keys let map merge meta neg? next ns-imports ns-resolve ns-unmap number? object-array select-keys seq seq? seqable? some? str string? symbol symbol? the-ns var? var-get vary-meta when])
     (:require [clojure.core :as -])
 )
 
@@ -28,7 +28,7 @@
 
 (defn #_"Appendable" Appendable''append [^Appendable this, #_"char|String" x] (.append this, x))
 
-(defn #_"int" Integer'parseInt [#_"String" s] (Integer/parseInt s))
+(defn #_"int" Integer'parseBinary [#_"String" s] (Integer/parseInt s, 2))
 
 (defn #_"StringBuilder" StringBuilder'new [] (StringBuilder.))
 
@@ -53,33 +53,44 @@
 
 (defn #_"any" Var''-get [^Var this] (.get this))
 
-(def -=            =)
-(def -aget         aget)
-(def -alength      alength)
-(def -apply        apply)
+(def -=        =)
+(def -apply    apply)
+(def -char     char)
+(def -char?    char?)
+(def -conj     conj)
+(def -first    first)
+(def -fn?      fn?)
+(def -int      int)
+(def -neg?     neg?)
+(def -next     next)
+(def -number?  number?)
+(def -seq      seq)
+(def -seq?     seq?)
+(def -seqable? seqable?)
+(def -str      str)
+(def -string?  string?)
+(def -symbol   symbol)
+(def -symbol?  symbol?)
+(def -the-ns   the-ns)
+(def -var?     var?)
+
+(defn -aget-0 [a] (aget a 0))
+(defn -aget-1 [a] (aget a 1))
+(defn -aget-2 [a] (aget a 2))
+
+(defn -anew-0 [] (object-array 0))
+(defn -anew-2 [] (object-array 2))
+(defn -anew-3 [] (object-array 3))
 
 (defn -array? [x] (and (some? x) (.isArray (class x))))
 
-(def -aset         aset)
-(def -char         char)
-(def -char?        char?)
-(def -conj         conj)
-(def -first        first)
-(def -fn?          fn?)
-(def -int          int)
-(def -neg?         neg?)
-(def -next         next)
-(def -number?      number?)
-(def -object-array object-array)
-(def -seq          seq)
-(def -seq?         seq?)
-(def -seqable?     seqable?)
-(def -str          str)
-(def -string?      string?)
-(def -symbol       symbol)
-(def -symbol?      symbol?)
-(def -the-ns       the-ns)
-(def -var?         var?)
+(defn -aset-0! [a x] (aset a 0 x) a)
+(defn -aset-1! [a x] (aset a 1 x) a)
+(defn -aset-2! [a x] (aset a 2 x) a)
+
+(defn -volatile-acas-1! [a x y] (when (identical? (-aget-1 a) x) (-aset-1! a y)))
+(defn -volatile-aget-1  [a]     (-aget-1 a))
+(defn -volatile-aset-1! [a x]   (-aset-1! a x))
 
 (ns beagle.core
     (:refer-clojure :only [])
@@ -88,7 +99,7 @@
 
 (-/import!)
 
-(-/refer! beagle.bore [-> -= Appendable''append Flushable''flush Integer'parseInt Matcher''matches Namespace''findInternedVar Pattern''matcher Pattern'compile PushbackReader''unread Reader''read StringBuilder''append StringBuilder''toString StringBuilder'new System'in System'out Var''-get -aget -alength and -apply -array? -aset -char -char? cond -conj cons -first -fn? identical? -int list -neg? -next -number? -object-array or -seq -seq? -seqable? -str -string? -symbol -the-ns throw! -var?])
+(-/refer! beagle.bore [-> -= Appendable''append Flushable''flush Integer'parseBinary Matcher''matches Namespace''findInternedVar Pattern''matcher Pattern'compile PushbackReader''unread Reader''read StringBuilder''append StringBuilder''toString StringBuilder'new System'in System'out Var''-get -aget-0 -aget-1 -aget-2 and -anew-0 -anew-2 -anew-3 -apply -array? -aset-0! -aset-1! -aset-2! -char -char? cond -conj cons -first -fn? identical? -int list -neg? -next -number? or -seq -seq? -seqable? -str -string? -symbol -the-ns throw! -var? -volatile-acas-1! -volatile-aget-1 -volatile-aset-1!])
 
 (-/defmacro about   [& s]   (-/cons 'do s))
 (-/defmacro declare [x]     (-/list 'def x nil))
@@ -113,18 +124,6 @@
 (defn false? [x] (identical? x false))
 (defn not    [x] (if x false true))
 (defn some?  [x] (not (nil? x)))
-
-(about #_"array"
-    (defn anew [n] (-/-object-array n))
-
-    (defn aget    [a i]   (-/-aget a i))
-    (defn alength [a]     (-/-alength a))
-    (defn aset!   [a i x] (-/-aset a i x) a)
-
-    (defn volatile-acas! [a i x y] (when (identical? (aget a i) x) (aset! a i y)))
-    (defn volatile-aget  [a i]     (aget a i))
-    (defn volatile-aset! [a i x]   (aset! a i x))
-)
 
 (about #_"seq"
     (declare cons?)
@@ -181,63 +180,33 @@
     (defn reduce-kv [f r kvs] (let [kvs (seq kvs)] (if (some? kvs) (#_recur reduce-kv f (f r (first kvs) (second kvs)) (next (next kvs))) r)))
 )
 
-(about #_"unicode"
-    (def Unicode'newline     10)
-    (def Unicode'escape      27)
-    (def Unicode'space       32)
-    (def Unicode'quotation   34)
-    (def Unicode'hash        35)
-    (def Unicode'apostrophe  39)
-    (def Unicode'lparen      40)
-    (def Unicode'rparen      41)
-    (def Unicode'comma       44)
-    (def Unicode'minus       45)
-    (def Unicode'slash       47)
-    (def Unicode'0           48)
-    (def Unicode'1           49)
-    (def Unicode'2           50)
-    (def Unicode'3           51)
-    (def Unicode'4           52)
-    (def Unicode'5           53)
-    (def Unicode'6           54)
-    (def Unicode'7           55)
-    (def Unicode'8           56)
-    (def Unicode'9           57)
-    (def Unicode'lbracket    91)
-    (def Unicode'backslash   92)
-    (def Unicode'rbracket    93)
-    (def Unicode'underscore  95)
-    (def Unicode'grave       96)
-    (def Unicode'n          110)
-)
-
 (about #_"beagle.Atom"
 
 (about #_"Atom"
     (defn #_"Atom" Atom'new [#_"any" init]
-        (-> (anew 2) (aset! 0 "Atom'meta") (volatile-aset! 1 init))
+        (-> (-/-anew-2) (-/-aset-0! "Atom'meta") (-/-volatile-aset-1! init))
     )
 
     (declare =)
 
-    (defn atom? [x] (and (-/-array? x) (-/-= (alength x) 2) (-/-= (aget x 0) "Atom'meta")))
+    (defn atom? [x] (and (-/-array? x) (-/-= (-/-aget-0 x) "Atom'meta")))
 
     (defn #_"any" Atom''deref [#_"Atom" this]
-        (volatile-aget this 1)
+        (-/-volatile-aget-1 this)
     )
 
     (declare apply)
 
     (defn #_"any" Atom''swap [#_"Atom" this, #_"fn" f, #_"seq" s]
         (loop []
-            (let [#_"any" o (volatile-aget this 1) #_"any" o' (apply f o s)]
-                (if (volatile-acas! this 1 o o') o' (recur))
+            (let [#_"any" o (-/-volatile-aget-1 this) #_"any" o' (apply f o s)]
+                (if (-/-volatile-acas-1! this o o') o' (recur))
             )
         )
     )
 
     (defn #_"any" Atom''reset [#_"Atom" this, #_"any" o']
-        (volatile-aset! this 1 o')
+        (-/-volatile-aset-1! this o')
         o'
     )
 )
@@ -270,13 +239,13 @@
 
 (about #_"Cons"
     (defn #_"Cons" Cons'new [#_"any" car, #_"seq" cdr]
-        (-> (anew 3) (aset! 0 "Cons'meta") (aset! 1 car) (aset! 2 cdr))
+        (-> (-/-anew-3) (-/-aset-0! "Cons'meta") (-/-aset-1! car) (-/-aset-2! cdr))
     )
 
-    (defn cons? [x] (and (-/-array? x) (-/-= (alength x) 3) (-/-= (aget x 0) "Cons'meta")))
+    (defn cons? [x] (and (-/-array? x) (-/-= (-/-aget-0 x) "Cons'meta")))
 
-    (defn #_"any" Cons''car [#_"Cons" this] (when (cons? this) (aget this 1)))
-    (defn #_"seq" Cons''cdr [#_"Cons" this] (when (cons? this) (aget this 2)))
+    (defn #_"any" Cons''car [#_"Cons" this] (when (cons? this) (-/-aget-1 this)))
+    (defn #_"seq" Cons''cdr [#_"Cons" this] (when (cons? this) (-/-aget-2 this)))
 
     (defn #_"seq" Cons''seq [#_"Cons" this]
         this
@@ -424,16 +393,19 @@
 
 (about #_"Symbol"
     (defn #_"Symbol" Symbol'new [#_"String" ns, #_"String" name]
-        (-> (anew 3) (aset! 0 "Symbol'meta") (aset! 1 ns) (aset! 2 name))
+        (-> (-/-anew-3) (-/-aset-0! "Symbol'meta") (-/-aset-1! ns) (-/-aset-2! name))
     )
 
-    (defn symbol? [x] (and (-/-array? x) (-/-= (alength x) 3) (-/-= (aget x 0) "Symbol'meta")))
+    (defn symbol? [x] (and (-/-array? x) (-/-= (-/-aget-0 x) "Symbol'meta")))
 
-    (defn #_"String" Symbol''ns   [#_"Symbol" this] (when (symbol? this) (aget this 1)))
-    (defn #_"String" Symbol''name [#_"Symbol" this] (when (symbol? this) (aget this 2)))
+    (defn #_"String" Symbol''ns   [#_"Symbol" this] (when (symbol? this) (-/-aget-1 this)))
+    (defn #_"String" Symbol''name [#_"Symbol" this] (when (symbol? this) (-/-aget-2 this)))
+
+    (declare Unicode'minus)
+    (declare Unicode'slash)
 
     (defn #_"Symbol" Symbol'create [#_"String" name]
-        (if (and (= (-/-int (first name)) Unicode'minus) (= (-/-int (second name)) Unicode'slash))
+        (if (and (= (first name) Unicode'minus) (= (second name) Unicode'slash))
             (Symbol'new "-", (apply -/-str (next (next name))))
             (Symbol'new nil, name)
         )
@@ -456,17 +428,39 @@
 (defn symbol [s] (cond (symbol? s) s (-/-symbol? s) (Symbol'create (-/-str s)) 'else (Symbol'create s)))
 )
 
+(about #_"unicode"
+    (defn binary [s] (-/-char (-/Integer'parseBinary (if (-/-number? s) (-/-str s) (Symbol''name s)))))
+
+    (def Unicode'newline    (binary    '1010))
+    (def Unicode'escape     (binary   '11011))
+    (def Unicode'space      (binary  '100000))
+    (def Unicode'quotation  (binary  '100010))
+    (def Unicode'hash       (binary  '100011))
+    (def Unicode'apostrophe (binary  '100111))
+    (def Unicode'lparen     (binary  '101000))
+    (def Unicode'rparen     (binary  '101001))
+    (def Unicode'comma      (binary  '101100))
+    (def Unicode'minus      (binary  '101101))
+    (def Unicode'slash      (binary  '101111))
+    (def Unicode'lbracket   (binary '1011011))
+    (def Unicode'backslash  (binary '1011100))
+    (def Unicode'rbracket   (binary '1011101))
+    (def Unicode'underscore (binary '1011111))
+    (def Unicode'grave      (binary '1100000))
+    (def Unicode'n          (binary '1101110))
+)
+
 (about #_"beagle.Closure"
 
 (about #_"Closure"
     (defn #_"Closure" Closure'new [#_"FnExpr" fun, #_"map" env]
-        (-> (anew 3) (aset! 0 "Closure'meta") (aset! 1 fun) (aset! 2 env))
+        (-> (-/-anew-3) (-/-aset-0! "Closure'meta") (-/-aset-1! fun) (-/-aset-2! env))
     )
 
-    (defn closure? [x] (and (-/-array? x) (-/-= (alength x) 3) (-/-= (aget x 0) "Closure'meta")))
+    (defn closure? [x] (and (-/-array? x) (-/-= (-/-aget-0 x) "Closure'meta")))
 
-    (defn #_"FnExpr" Closure''fun [#_"Closure" this] (when (closure? this) (aget this 1)))
-    (defn #_"map"    Closure''env [#_"Closure" this] (when (closure? this) (aget this 2)))
+    (defn #_"FnExpr" Closure''fun [#_"Closure" this] (when (closure? this) (-/-aget-1 this)))
+    (defn #_"map"    Closure''env [#_"Closure" this] (when (closure? this) (-/-aget-2 this)))
 
     (declare Machine'compute)
 
@@ -530,14 +524,14 @@
 
 (defn = [x y]
     (cond
-        (identical? x y)                 true
-        (or (nil? x) (nil? y) (true? x) (true? y) (false? x) (false? y)) false
-        (or (-/-string? x) (-/-number? x) (-/-char? x)) (-/-= x y)
-        (or (symbol? x) (-/-symbol? x)) (Symbol''equals (symbol! x), (symbol! y))
-        (or (symbol? y) (-/-symbol? y)) (Symbol''equals (symbol! y), (symbol! x))
-        (cons? x)                       (Cons''equals x, y)
-        (cons? y)                       (Cons''equals y, x)
-        'else                           (-/throw! "= not supported on " x ", not even on " y)
+        (identical? x y)                  true
+        (or (nil? x) (nil? y) (true? x)  (true? y) (false? x) (false? y)) false
+        (or (-/-string? x) (-/-char? x)) (-/-= x y)
+        (or (symbol? x) (-/-symbol? x))  (Symbol''equals (symbol! x), (symbol! y))
+        (or (symbol? y) (-/-symbol? y))  (Symbol''equals (symbol! y), (symbol! x))
+        (cons? x)                        (Cons''equals x, y)
+        (cons? y)                        (Cons''equals y, x)
+        'else                            (-/throw! "= not supported on " x ", not even on " y)
     )
 )
 )
@@ -545,10 +539,10 @@
 (about #_"append"
     (defn #_"char|String" escape-str [#_"char" c]
         (cond
-            (= (-/-int c) Unicode'newline)   "\\n"
-            (= (-/-int c) Unicode'quotation) "\\\""
-            (= (-/-int c) Unicode'backslash) "\\\\"
-            'else                            c
+            (= c Unicode'newline)   "\\n"
+            (= c Unicode'quotation) "\\\""
+            (= c Unicode'backslash) "\\\\"
+            'else                   c
         )
     )
 
@@ -604,7 +598,6 @@
             (nil? x)       (-/Appendable''append a, "nil")
             (true? x)      (-/Appendable''append a, "true")
             (false? x)     (-/Appendable''append a, "false")
-            (-/-number? x) (-/Appendable''append a, (-/-str x))
             (-/-string? x) (append-str a x)
             (symbol? x)    (append-sym a x)
             (cons? x)      (append-seq a x)
@@ -613,7 +606,7 @@
             (-/-symbol? x) (append-sym a (symbol! x))
             (-/-seq? x)    (-/Appendable''append a, "-seq")
             (-/-fn? x)     (-/Appendable''append a, "-fn")
-            'else          (-/Appendable''append a, "-object")
+            'else          (-/throw! "append not supported on " x)
         )
     )
 
@@ -632,9 +625,9 @@
         )
     )
 
-    (defn space   [] (-/Appendable''append -/System'out, (-/-char Unicode'space))   nil)
-    (defn newline [] (-/Appendable''append -/System'out, (-/-char Unicode'newline)) nil)
-    (defn flush   [] (-/Flushable''flush   -/System'out)                            nil)
+    (defn space   [] (-/Appendable''append -/System'out, Unicode'space)   nil)
+    (defn newline [] (-/Appendable''append -/System'out, Unicode'newline) nil)
+    (defn flush   [] (-/Flushable''flush   -/System'out)                  nil)
 
     (defn pr [& s]
         (when (some? s)
@@ -937,65 +930,29 @@
         (and (LispReader'isMacro c) (not (= c Unicode'hash)) (not (= c Unicode'apostrophe)))
     )
 
-    (defn #_"boolean" LispReader'isDigit [#_"unicode" c]
-        (or (= c Unicode'0) (= c Unicode'1) (= c Unicode'2) (= c Unicode'3) (= c Unicode'4) (= c Unicode'5) (= c Unicode'6) (= c Unicode'7) (= c Unicode'8) (= c Unicode'9))
-    )
-
-    (def #_"unicode" LispReader'naught 31)
+    (def LispReader'naught (binary '11111))
 
     (defn #_"boolean" LispReader'isWhitespace [#_"unicode" c]
         (or (= c Unicode'space) (= c Unicode'comma) (= c Unicode'newline) (= c LispReader'naught))
     )
 
     (defn #_"Unicode" LispReader'read1 [#_"Reader" r]
-        (let [#_"unicode" c (-/Reader''read r)]
-            (when (not (-/-neg? c))
-                c
+        (let [#_"int" x (-/Reader''read r)]
+            (when (not (-/-neg? x))
+                (-/-char x)
             )
         )
     )
 
     (defn #_"void" LispReader'unread [#_"PushbackReader" r, #_"Unicode" c]
         (when (some? c)
-            (-/PushbackReader''unread r, c)
+            (-/PushbackReader''unread r, (-/-int c))
         )
         nil
     )
 
-    (def #_"Pattern" LispReader'rxInteger (-/Pattern'compile "0|[1-9][0-9]*"))
-
-    (defn #_"number" LispReader'matchNumber [#_"String" s]
-        (let [#_"Matcher" m (-/Pattern''matcher LispReader'rxInteger, s)]
-            (when (-/Matcher''matches m)
-                (-/Integer'parseInt s)
-            )
-        )
-    )
-
-    (defn #_"number" LispReader'readNumber [#_"PushbackReader" r, #_"unicode" c]
-        (let [#_"String" s
-                (let [#_"StringBuilder" sb (-/StringBuilder'new) _ (-/StringBuilder''append sb, (-/-char c))]
-                    (loop []
-                        (let [c (LispReader'read1 r)]
-                            (if (or (nil? c) (LispReader'isWhitespace c) (LispReader'isMacro c))
-                                (do
-                                    (LispReader'unread r, c)
-                                    (-/StringBuilder''toString sb)
-                                )
-                                (do
-                                    (-/StringBuilder''append sb, (-/-char c))
-                                    (recur)
-                                )
-                            )
-                        )
-                    )
-                )]
-            (or (LispReader'matchNumber s) (-/throw! "invalid number " s))
-        )
-    )
-
     (defn #_"String" LispReader'readToken [#_"PushbackReader" r, #_"unicode" c]
-        (let [#_"StringBuilder" sb (-/StringBuilder'new) _ (-/StringBuilder''append sb, (-/-char c))]
+        (let [#_"StringBuilder" sb (-/StringBuilder'new) _ (-/StringBuilder''append sb, c)]
             (loop []
                 (let [c (LispReader'read1 r)]
                     (if (or (nil? c) (LispReader'isWhitespace c) (LispReader'isTerminatingMacro c))
@@ -1004,7 +961,7 @@
                             (-/StringBuilder''toString sb)
                         )
                         (do
-                            (-/StringBuilder''append sb, (-/-char c))
+                            (-/StringBuilder''append sb, c)
                             (recur)
                         )
                     )
@@ -1015,7 +972,7 @@
 
     #_"\n !\"#%&'()*,-./0123456789=>?ABCDEFHILMNOPRSTUVWZ[\\]_abcdefghijklmnopqrstuvwxyz|"
 
-    (def #_"Pattern" LispReader'rxSymbol (-/Pattern'compile "(-/)?[-a-zA-Z_?!=&%][-a-zA-Z_0-9'*?!=>]*"))
+    (def #_"Pattern" LispReader'rxSymbol (-/Pattern'compile "(-/)?[-a-zA-Z_0-9?!=&%][-a-zA-Z_0-9'*?!=>]*"))
 
     (defn #_"symbol" LispReader'matchSymbol [#_"String" s]
         (let [#_"Matcher" m (-/Pattern''matcher LispReader'rxSymbol, s)]
@@ -1039,8 +996,6 @@
                         (-/throw! "EOF while reading")
                     (and (some? delim) (= delim c))
                         delim!
-                    (LispReader'isDigit c)
-                        (LispReader'readNumber r, c)
                     'else
                         (let [#_"fn" f'macro (get LispReader'macros c)]
                             (if (some? f'macro)
@@ -1055,7 +1010,7 @@
         )
     )
 
-    (def #_"any" LispReader'READ_FINISHED (anew 0))
+    (def #_"any" LispReader'READ_FINISHED (-/-anew-0))
 
     (defn #_"seq" LispReader'readDelimitedForms [#_"PushbackReader" r, #_"seq" scope, #_"unicode" delim]
         (loop [#_"seq" z nil]
@@ -1075,7 +1030,7 @@
                     (= c Unicode'n)         Unicode'newline
                     (= c Unicode'backslash) c
                     (= c Unicode'quotation) c
-                    'else (-/throw! "unsupported escape character \\" (-/-char c))
+                    'else (-/throw! "unsupported escape character \\" c)
                 )
                 (-/throw! "EOF while reading string")
             )
@@ -1088,7 +1043,7 @@
                 (let [#_"Unicode" c (LispReader'read1 r)]
                     (if (some? c)
                         (when (not (= c Unicode'quotation))
-                            (-/StringBuilder''append sb, (-/-char (if (= c Unicode'backslash) (StringReader'escape r) c)))
+                            (-/StringBuilder''append sb, (if (= c Unicode'backslash) (StringReader'escape r) c))
                             (recur)
                         )
                         (-/throw! "EOF while reading string")
@@ -1118,7 +1073,7 @@
                         (f'macro r scope c)
                         (do
                             (LispReader'unread r, c)
-                            (-/throw! "no dispatch macro for " (-/-char c))
+                            (-/throw! "no dispatch macro for " c)
                         )
                     )
                 )
@@ -1136,7 +1091,7 @@
     )
 
     (defn #_"any" unmatched-delimiter-reader [#_"PushbackReader" _r, #_"seq" scope, #_"unicode" delim]
-        (-/throw! "unmatched delimiter " (-/-char delim))
+        (-/throw! "unmatched delimiter " delim)
     )
 
     (def #_"map" LispReader'macros
@@ -1160,7 +1115,7 @@
 )
 
 (defn repl []
-    (let [esc (-/-char Unicode'escape)] (print (-/-str esc "[31mBeagle " esc "[32m=> " esc "[0m")))
+    (let [esc Unicode'escape] (print (-/-str esc "[31mBeagle " esc "[32m=> " esc "[0m")))
     (flush)
     (-> (read) (eval) (prn))
     (#_recur repl)
