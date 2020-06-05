@@ -12,7 +12,6 @@
 (import!
     [java.lang Appendable Error Integer StringBuilder]
     [java.io Flushable PrintWriter PushbackReader Reader]
-    [java.util.regex Matcher Pattern]
     [clojure.lang Namespace Var]
 )
 
@@ -43,11 +42,6 @@
 (defn #_"void" PushbackReader''unread [^PushbackReader this, #_"int" x] (.unread this, x))
 
 (defn #_"int" Reader''read [^Reader this] (.read this))
-
-(defn #_"Pattern" Pattern'compile  [#_"String" s]                (Pattern/compile s))
-(defn #_"Matcher" Pattern''matcher [^Pattern this, #_"String" s] (.matcher this, s))
-
-(defn #_"boolean" Matcher''matches [^Matcher this] (.matches this))
 
 (defn #_"var" Namespace''findInternedVar [^Namespace this, #_"Symbol" name] (.findInternedVar this, name))
 
@@ -99,7 +93,7 @@
 
 (-/import!)
 
-(-/refer! beagle.bore [-> -= Appendable''append Flushable''flush Integer'parseBinary Matcher''matches Namespace''findInternedVar Pattern''matcher Pattern'compile PushbackReader''unread Reader''read StringBuilder''append StringBuilder''toString StringBuilder'new System'in System'out Var''-get -aget-0 -aget-1 -aget-2 and -anew-0 -anew-2 -anew-3 -apply -array? -aset-0! -aset-1! -aset-2! -char -char? cond -conj cons -first -fn? identical? -int list -neg? -next -number? or -seq -seq? -seqable? -str -string? -symbol -the-ns throw! -var? -volatile-acas-1! -volatile-aget-1 -volatile-aset-1!])
+(-/refer! beagle.bore [-> -= Appendable''append Flushable''flush Integer'parseBinary Namespace''findInternedVar PushbackReader''unread Reader''read StringBuilder''append StringBuilder''toString StringBuilder'new System'in System'out Var''-get -aget-0 -aget-1 -aget-2 and -anew-0 -anew-2 -anew-3 -apply -array? -aset-0! -aset-1! -aset-2! -char -char? cond -conj cons -first -fn? identical? -int list -neg? -next -number? or -seq -seq? -seqable? -str -string? -symbol -the-ns throw! -var? -volatile-acas-1! -volatile-aget-1 -volatile-aset-1!])
 
 (-/defmacro about   [& s]   (-/cons 'do s))
 (-/defmacro declare [x]     (-/list 'def x nil))
@@ -404,10 +398,10 @@
     (declare Unicode'minus)
     (declare Unicode'slash)
 
-    (defn #_"Symbol" Symbol'create [#_"String" name]
-        (if (and (= (first name) Unicode'minus) (= (second name) Unicode'slash))
-            (Symbol'new "-", (apply -/-str (next (next name))))
-            (Symbol'new nil, name)
+    (defn #_"Symbol" Symbol'create [#_"String" s]
+        (if (and (= (first s) Unicode'minus) (= (second s) Unicode'slash))
+            (Symbol'new "-", (apply -/-str (next (next s))))
+            (Symbol'new nil, s)
         )
     )
 
@@ -431,23 +425,91 @@
 (about #_"unicode"
     (defn binary [s] (-/-char (-/Integer'parseBinary (if (-/-number? s) (-/-str s) (Symbol''name s)))))
 
-    (def Unicode'newline    (binary    '1010))
-    (def Unicode'escape     (binary   '11011))
-    (def Unicode'space      (binary  '100000))
-    (def Unicode'quotation  (binary  '100010))
-    (def Unicode'hash       (binary  '100011))
-    (def Unicode'apostrophe (binary  '100111))
-    (def Unicode'lparen     (binary  '101000))
-    (def Unicode'rparen     (binary  '101001))
-    (def Unicode'comma      (binary  '101100))
-    (def Unicode'minus      (binary  '101101))
-    (def Unicode'slash      (binary  '101111))
-    (def Unicode'lbracket   (binary '1011011))
-    (def Unicode'backslash  (binary '1011100))
-    (def Unicode'rbracket   (binary '1011101))
-    (def Unicode'underscore (binary '1011111))
-    (def Unicode'grave      (binary '1100000))
-    (def Unicode'n          (binary '1101110))
+    (def Unicode'newline     (binary    '1010))
+    (def Unicode'escape      (binary   '11011))
+    (def Unicode'space       (binary  '100000))
+    (def Unicode'exclamation (binary  '100001))
+    (def Unicode'quotation   (binary  '100010))
+    (def Unicode'hash        (binary  '100011))
+    (def Unicode'percent     (binary  '100101))
+    (def Unicode'ampersand   (binary  '100110))
+    (def Unicode'apostrophe  (binary  '100111))
+    (def Unicode'lparen      (binary  '101000))
+    (def Unicode'rparen      (binary  '101001))
+    (def Unicode'asterisk    (binary  '101010))
+    (def Unicode'comma       (binary  '101100))
+    (def Unicode'minus       (binary  '101101))
+    (def Unicode'slash       (binary  '101111))
+    (def Unicode'0           (binary  '110000))
+    (def Unicode'1           (binary  '110001))
+    (def Unicode'2           (binary  '110010))
+    (def Unicode'3           (binary  '110011))
+    (def Unicode'4           (binary  '110100))
+    (def Unicode'5           (binary  '110101))
+    (def Unicode'6           (binary  '110110))
+    (def Unicode'7           (binary  '110111))
+    (def Unicode'8           (binary  '111000))
+    (def Unicode'9           (binary  '111001))
+    (def Unicode'equals      (binary  '111101))
+    (def Unicode'greater     (binary  '111110))
+    (def Unicode'question    (binary  '111111))
+    (def Unicode'A           (binary '1000001))
+    (def Unicode'B           (binary '1000010))
+    (def Unicode'C           (binary '1000011))
+    (def Unicode'D           (binary '1000100))
+    (def Unicode'E           (binary '1000101))
+    (def Unicode'F           (binary '1000110))
+    (def Unicode'G           (binary '1000111))
+    (def Unicode'H           (binary '1001000))
+    (def Unicode'I           (binary '1001001))
+    (def Unicode'J           (binary '1001010))
+    (def Unicode'K           (binary '1001011))
+    (def Unicode'L           (binary '1001100))
+    (def Unicode'M           (binary '1001101))
+    (def Unicode'N           (binary '1001110))
+    (def Unicode'O           (binary '1001111))
+    (def Unicode'P           (binary '1010000))
+    (def Unicode'Q           (binary '1010001))
+    (def Unicode'R           (binary '1010010))
+    (def Unicode'S           (binary '1010011))
+    (def Unicode'T           (binary '1010100))
+    (def Unicode'U           (binary '1010101))
+    (def Unicode'V           (binary '1010110))
+    (def Unicode'W           (binary '1010111))
+    (def Unicode'X           (binary '1011000))
+    (def Unicode'Y           (binary '1011001))
+    (def Unicode'Z           (binary '1011010))
+    (def Unicode'lbracket    (binary '1011011))
+    (def Unicode'backslash   (binary '1011100))
+    (def Unicode'rbracket    (binary '1011101))
+    (def Unicode'underscore  (binary '1011111))
+    (def Unicode'grave       (binary '1100000))
+    (def Unicode'a           (binary '1100001))
+    (def Unicode'b           (binary '1100010))
+    (def Unicode'c           (binary '1100011))
+    (def Unicode'd           (binary '1100100))
+    (def Unicode'e           (binary '1100101))
+    (def Unicode'f           (binary '1100110))
+    (def Unicode'g           (binary '1100111))
+    (def Unicode'h           (binary '1101000))
+    (def Unicode'i           (binary '1101001))
+    (def Unicode'j           (binary '1101010))
+    (def Unicode'k           (binary '1101011))
+    (def Unicode'l           (binary '1101100))
+    (def Unicode'm           (binary '1101101))
+    (def Unicode'n           (binary '1101110))
+    (def Unicode'o           (binary '1101111))
+    (def Unicode'p           (binary '1110000))
+    (def Unicode'q           (binary '1110001))
+    (def Unicode'r           (binary '1110010))
+    (def Unicode's           (binary '1110011))
+    (def Unicode't           (binary '1110100))
+    (def Unicode'u           (binary '1110101))
+    (def Unicode'v           (binary '1110110))
+    (def Unicode'w           (binary '1110111))
+    (def Unicode'x           (binary '1111000))
+    (def Unicode'y           (binary '1111001))
+    (def Unicode'z           (binary '1111010))
 )
 
 (about #_"beagle.Closure"
@@ -930,6 +992,41 @@
         (and (LispReader'isMacro c) (not (= c Unicode'hash)) (not (= c Unicode'apostrophe)))
     )
 
+    (defn #_"boolean" LispReader'isLetter [#_"unicode" c]
+        (or
+            (= c Unicode'a) (= c Unicode'A)
+            (= c Unicode'b) (= c Unicode'B)
+            (= c Unicode'c) (= c Unicode'C)
+            (= c Unicode'd) (= c Unicode'D)
+            (= c Unicode'e) (= c Unicode'E)
+            (= c Unicode'f) (= c Unicode'F)
+            (= c Unicode'g) (= c Unicode'G)
+            (= c Unicode'h) (= c Unicode'H)
+            (= c Unicode'i) (= c Unicode'I)
+            (= c Unicode'j) (= c Unicode'J)
+            (= c Unicode'k) (= c Unicode'K)
+            (= c Unicode'l) (= c Unicode'L)
+            (= c Unicode'm) (= c Unicode'M)
+            (= c Unicode'n) (= c Unicode'N)
+            (= c Unicode'o) (= c Unicode'O)
+            (= c Unicode'p) (= c Unicode'P)
+            (= c Unicode'q) (= c Unicode'Q)
+            (= c Unicode'r) (= c Unicode'R)
+            (= c Unicode's) (= c Unicode'S)
+            (= c Unicode't) (= c Unicode'T)
+            (= c Unicode'u) (= c Unicode'U)
+            (= c Unicode'v) (= c Unicode'V)
+            (= c Unicode'w) (= c Unicode'W)
+            (= c Unicode'x) (= c Unicode'X)
+            (= c Unicode'y) (= c Unicode'Y)
+            (= c Unicode'z) (= c Unicode'Z)
+        )
+    )
+
+    (defn #_"boolean" LispReader'isDigit [#_"unicode" c]
+        (or (= c Unicode'0) (= c Unicode'1) (= c Unicode'2) (= c Unicode'3) (= c Unicode'4) (= c Unicode'5) (= c Unicode'6) (= c Unicode'7) (= c Unicode'8) (= c Unicode'9))
+    )
+
     (def LispReader'naught (binary '11111))
 
     (defn #_"boolean" LispReader'isWhitespace [#_"unicode" c]
@@ -972,19 +1069,33 @@
 
     #_"\n !\"#%&'()*,-./0123456789=>?ABCDEFHILMNOPRSTUVWZ[\\]_abcdefghijklmnopqrstuvwxyz|"
 
-    (def #_"Pattern" LispReader'rxSymbol (-/Pattern'compile "(-/)?[-a-zA-Z_0-9?!=&%][-a-zA-Z_0-9'*?!=>]*"))
-
-    (defn #_"symbol" LispReader'matchSymbol [#_"String" s]
-        (let [#_"Matcher" m (-/Pattern''matcher LispReader'rxSymbol, s)]
-            (when (-/Matcher''matches m)
-                (symbol s)
+    (defn #_"boolean" LispReader'isSymbol [#_"String" s]
+        (let [s (if (and (= (first s) Unicode'minus) (= (second s) Unicode'slash)) (next (next s)) s)]
+            (and
+                (let [#_"Unicode" c (first s)]
+                    (or (= c Unicode'minus) (LispReader'isLetter c) (= c Unicode'underscore) (LispReader'isDigit c) (= c Unicode'question) (= c Unicode'exclamation) (= c Unicode'equals) (= c Unicode'ampersand) (= c Unicode'percent))
+                )
+                (loop [s (next s)]
+                    (or (nil? s)
+                        (and
+                            (let [#_"Unicode" c (first s)]
+                                (or (= c Unicode'minus) (LispReader'isLetter c) (= c Unicode'underscore) (LispReader'isDigit c) (= c Unicode'apostrophe) (= c Unicode'asterisk) (= c Unicode'question) (= c Unicode'exclamation) (= c Unicode'equals) (= c Unicode'greater))
+                            )
+                            (recur (next s))
+                        )
+                    )
+                )
             )
         )
     )
 
     (defn #_"symbol" LispReader'interpretToken [#_"String" s]
-        (cond (= s "nil") nil (= s "true") true (= s "false") false 'else
-            (or (LispReader'matchSymbol s) (-/throw! "invalid token " s))
+        (cond
+            (= s "nil")              nil
+            (= s "true")             true
+            (= s "false")            false
+            (LispReader'isSymbol s) (symbol s)
+            'else                   (-/throw! "invalid token " s)
         )
     )
 
