@@ -3,16 +3,15 @@
 )
 
 (ns beagle.bore
-    (:refer-clojure :only [*in* *ns* *out* = aget apply aset char char? class conj defn doseq first fn fn? import instance? int keys let map merge meta neg? next not ns-imports ns-resolve ns-unmap number? object-array select-keys seq seq? seqable? some? str string? symbol symbol? the-ns var? var-get vary-meta when])
+    (:refer-clojure :only [*in* *ns* *out* = aget apply aset char char? class conj defn doseq first fn fn? import int keys let map merge meta neg? next not ns-imports ns-resolve ns-unmap number? object-array select-keys seq seq? seqable? some? str string? symbol symbol? the-ns var? var-get vary-meta when])
     (:require [clojure.core :as -])
 )
 
 (-/defmacro import! [& syms-or-seqs] `(do (doseq [n# (keys (ns-imports *ns*))] (ns-unmap *ns* n#)) (import ~@syms-or-seqs)))
 
 (import!
-    [java.lang Appendable Error Integer]
-    [java.io Flushable PrintWriter PushbackReader Reader]
-    [clojure.lang Namespace Var]
+    [java.lang Error Integer String]
+    [clojure.lang Var]
 )
 
 (-/defmacro refer! [ns s]
@@ -25,54 +24,30 @@
 
 (defn throw! [& s] (throw (Error. (apply str s))))
 
-(defn -appendable? [x] (instance? Appendable x))
+(defn -append [_ x] (.append *out*, x) _)
+(defn -flush  [_]   (.flush *out*) _)
 
-(defn Appendable''append [^Appendable this, x] (.append this, x))
+(defn -unread [_ c] (.unread *in*, (int c)))
+(defn -read   [_]   (let [x (.read *in*)] (when (not (neg? x)) (char x))))
 
-(defn Integer'parseBinary [s] (Integer/parseInt s, 2))
+(defn binary [s] (char (Integer/parseInt (if (number? s) (str s) s), 2)))
 
-(def System'in  *in*)
-(def System'out *out*)
-
-(defn Flushable''flush [^Flushable this] (.flush this))
-
-(defn PushbackReader''unread [^PushbackReader this, x] (.unread this, x))
-
-(defn -unread [r c]
-    (PushbackReader''unread r, (int c))
-)
-
-(defn Reader''read [^Reader this] (.read this))
-
-(defn -read [r]
-    (let [x (Reader''read r)]
-        (when (not (neg? x))
-            (char x)
-        )
-    )
-)
-
-(defn Namespace''findInternedVar [^Namespace this, name] (.findInternedVar this, name))
-
-(defn Var''-get [^Var this] (.get this))
+(defn -var-find [^String s] (.findInternedVar (the-ns 'beagle.core), (symbol s)))
+(defn -var-get  [^Var this] (.get this))
 
 (def -=        =)
 (def -apply    apply)
-(def -char     char)
 (def -char?    char?)
 (def -conj     conj)
 (def -first    first)
 (def -fn?      fn?)
 (def -next     next)
-(def -number?  number?)
 (def -seq      seq)
 (def -seq?     seq?)
 (def -seqable? seqable?)
 (def -str      str)
 (def -string?  string?)
-(def -symbol   symbol)
 (def -symbol?  symbol?)
-(def -the-ns   the-ns)
 (def -var?     var?)
 
 (defn -aget-0 [a] (aget a 0))
@@ -106,7 +81,7 @@
 
 (-/import!)
 
-(-/refer! beagle.bore [-> -= Appendable''append Atom'meta Closure'meta Cons'meta Flushable''flush Integer'parseBinary Namespace''findInternedVar String'meta Symbol'meta System'in System'out Var''-get -aget-0 -aget-1 -aget-2 and -anew-0 -anew-2 -anew-3 -appendable? -apply -array? -aset-0! -aset-1! -aset-2! -char -char? cond -conj cons -first -fn? identical? list -next -number? or -read -seq -seq? -seqable? -str -string? -symbol -the-ns throw! -unread -var? -volatile-acas-1! -volatile-aget-1 -volatile-aset-1!])
+(-/refer! beagle.bore [-> -= Atom'meta Closure'meta Cons'meta String'meta Symbol'meta -aget-0 -aget-1 -aget-2 and -anew-0 -anew-2 -anew-3 -append -apply -array? -aset-0! -aset-1! -aset-2! binary -char? cond -conj cons -first -flush -fn? identical? list -next or -read -seq -seq? -seqable? -str -string? throw! -unread -var? -var-find -var-get -volatile-acas-1! -volatile-aget-1 -volatile-aset-1!])
 
 (-/defmacro about   [& s]   (-/cons 'do s))
 (-/defmacro declare [x]     (-/list 'def x nil))
@@ -119,10 +94,18 @@
 (-/defmacro defn     [f & s] (-/list 'def f (-/cons 'fn s)))
 (-/defmacro lazy-seq [& s]   (-/cons 'fn (-/cons [] s)))
 
+(-/defmacro &do [& s] (-/cons 'do s))
+
+(def &binary     -/binary)
+(def &identical? -/identical?)
+(def &throw!     -/throw!)
+
+(about #_"Beagle")
+
 (defn memoize  [x] x)
 (defn -symbol? [x] false)
 
-(def identical? -/identical?)
+(defn identical? [x y] (&identical? x y))
 
 (defn identity [x] x)
 
@@ -148,7 +131,7 @@
             (closure? s)    (Closure''seq s)
             (-/-seqable? s) (-/-seq s)
             (-/-fn? s)      (-/-apply s nil)
-            'else           (-/throw! "seq not supported on " s)
+            'else           (&throw! "seq not supported on " s)
         )
     )
 
@@ -160,7 +143,7 @@
                 (nil? s)     nil
                 (cons? s)   (Cons''first s)
                 (-/-seq? s) (-/-first s)
-                'else       (-/throw! "first not supported on " s)
+                'else       (&throw! "first not supported on " s)
             )
         )
     )
@@ -173,7 +156,7 @@
                 (nil? s)     nil
                 (cons? s)   (Cons''next s)
                 (-/-seq? s) (-/-next s)
-                'else       (-/throw! "next not supported on " s)
+                'else       (&throw! "next not supported on " s)
             )
         )
     )
@@ -224,21 +207,21 @@
 (defn deref [a]
     (cond
         (atom? a) (Atom''deref a)
-        'else     (-/throw! "deref not supported on " a)
+        'else     (&throw! "deref not supported on " a)
     )
 )
 
 (defn swap! [a f & s]
     (cond
         (atom? a) (Atom''swap a, f, s)
-        'else     (-/throw! "swap! not supported on " a)
+        'else     (&throw! "swap! not supported on " a)
     )
 )
 
 (defn reset! [a x]
     (cond
         (atom? a) (Atom''reset a, x)
-        'else     (-/throw! "reset! not supported on " a)
+        'else     (&throw! "reset! not supported on " a)
     )
 )
 
@@ -288,8 +271,6 @@
 (defn reverse [s] (reduce conj nil s))
 
 (defn list [& s] s)
-
-(defn reverse! [s] (reduce -/-conj (-/list) s))
 
 (defn some [f s]
     (let [s (seq s)]
@@ -366,7 +347,7 @@
     (cond
         (nil? m)  (ConsMap'new k, v, nil)
         (cons? m) (ConsMap''assoc m, k, v)
-        'else     (-/throw! "assoc not supported on " m)
+        'else     (&throw! "assoc not supported on " m)
     )
 )
 
@@ -376,7 +357,7 @@
     (cond
         (nil? m)   false
         (cons? m) (ConsMap''contains? m, k)
-        'else     (-/throw! "contains? not supported on " m)
+        'else     (&throw! "contains? not supported on " m)
     )
 )
 
@@ -384,7 +365,7 @@
     (cond
         (nil? m)   nil
         (cons? m) (ConsMap''get m, k)
-        'else     (-/throw! "get not supported on " m)
+        'else     (&throw! "get not supported on " m)
     )
 )
 
@@ -455,7 +436,7 @@
 (defn symbol [s] (cond (symbol? s) s (-/-symbol? s) (Symbol'create (-/-str s)) 'else (Symbol'create s)))
 
 (about #_"unicode"
-    (defn binary [s] (-/-char (-/Integer'parseBinary (if (-/-number? s) (-/-str s) (apply -/-str (Symbol''name s))))))
+    (defn binary [s] (&binary s))
 
     (def Unicode'newline     (binary    '1010))
     (def Unicode'escape      (binary   '11011))
@@ -587,28 +568,48 @@
         (cond
             (closure? f) (Closure''applyTo f, s)
             (atom? f)    (apply (deref f) s)
-            (-/-fn? f)   (-/-apply f (reverse! (reverse s)))
-            'else        (-/throw! "apply not supported on " f)
+            (-/-fn? f)   (-/-apply f (reduce -/-conj (-/list) (reverse s)))
+            'else        (&throw! "apply not supported on " f)
         )
     )
 )
 
 (about #_"Var"
+    (def Beagle'ns (atom nil))
+
     (defn Var'new []
         (atom nil)
     )
 
-    (defn Var''get [this]
-        (if (-/-var? this) (-/Var''-get this) (deref this))
+    (defn Var'find [sym]
+        (if (not (Symbol''alt? sym))
+            (get (deref Beagle'ns) sym)
+            (-/-var-find (apply -/-str (Symbol''name sym)))
+        )
     )
 
-    (defn Var''bindRoot [this, root]
+    (defn Var'lookup [sym]
+        (if (not (Symbol''alt? sym))
+            (or
+                (get (deref Beagle'ns) sym)
+                (let [v (Var'new)]
+                    (swap! Beagle'ns assoc sym v)
+                    v
+                )
+            )
+            (&throw! "can't create defs for alt ns")
+        )
+    )
+
+    (defn Var''get [this]
+        (if (-/-var? this) (-/-var-get this) (deref this))
+    )
+
+    (defn Var''set [this, root]
         (reset! this root)
         nil
     )
 )
-
-(about #_"equivalence"
 
 (defn = [x y]
     (cond
@@ -623,18 +624,20 @@
         (-/-string? x)   (-/-= x y)
         (cons? x)        (Cons''equals x, y)
         (cons? y)        (Cons''equals y, x)
-        'else            (-/throw! "= not supported on " x ", not even on " y)
+        'else            (&throw! "= not supported on " x ", not even on " y)
     )
-)
 )
 
 (about #_"append"
+    (def Beagle'in  nil)
+    (def Beagle'out nil)
+
     (defn append' [a x]
         (cond
-            (-/-appendable? a)              (-/Appendable''append a, (if (string? x) (apply -/-str x) x))
+            (nil? a)                        (-/-append a (if (string? x) (apply -/-str x) x))
             (-/-char? x)                    (conj a x)
             (or (string? x) (-/-string? x)) (reduce conj a x)
-            'else                           (-/throw! "append' not supported for " x)
+            'else                           (&throw! "append' not supported for " x)
         )
     )
 
@@ -647,7 +650,7 @@
         )
     )
 
-    (defn append-str [a, x]
+    (defn append-str [a x]
         (let [
             a (append' a "\"")
             a (reduce (fn [%1 %2] (append' %1 (escape-str %2))) a x)
@@ -657,7 +660,7 @@
         )
     )
 
-    (defn append-sym [a, x]
+    (defn append-sym [a x]
         (let [
             a (if (Symbol''alt? x) (append' a "-/") a)
             a (append' a (Symbol''name x))
@@ -666,7 +669,7 @@
         )
     )
 
-    (defn append* [a, b, f'append, c, d, q]
+    (defn append* [a b f'append c d q]
         (let [
             a (append' a b)
             a
@@ -688,9 +691,9 @@
 
     (declare append)
 
-    (defn append-seq [a, x] (append* a "(" append " " ")" x))
+    (defn append-seq [a x] (append* a "(" append " " ")" x))
 
-    (defn append [a, x]
+    (defn append [a x]
         (cond
             (nil? x)       (append' a "nil")
             (true? x)      (append' a "true")
@@ -704,11 +707,11 @@
             (-/-string? x) (append-str a x)
             (-/-seq? x)    (append' a "-seq")
             (-/-fn? x)     (append' a "-fn")
-            'else          (-/throw! "append not supported on " x)
+            'else          (&throw! "append not supported on " x)
         )
     )
 
-    (defn append! [a, x]
+    (defn append! [a x]
         (if (or (string? x) (-/-string? x) (-/-char? x)) (append' a x) (append a x))
     )
 
@@ -723,15 +726,15 @@
         )
     )
 
-    (defn space   [] (append' -/System'out Unicode'space)   nil)
-    (defn newline [] (append' -/System'out Unicode'newline) nil)
+    (defn space   [] (append' Beagle'out Unicode'space)   nil)
+    (defn newline [] (append' Beagle'out Unicode'newline) nil)
 
-    (defn flush [] (-/Flushable''flush -/System'out) nil)
+    (defn flush [] (-/-flush Beagle'out) nil)
 
     (defn pr [& s]
         (when (some? s)
             (loop [x (first s) s (next s)]
-                (append -/System'out x)
+                (append Beagle'out x)
                 (when (some? s)
                     (space)
                     (recur (first s) (next s))
@@ -744,7 +747,7 @@
     (defn print [& s]
         (when (some? s)
             (loop [x (first s) s (next s)]
-                (append! -/System'out x)
+                (append! Beagle'out x)
                 (when (some? s)
                     (space)
                     (recur (first s) (next s))
@@ -759,21 +762,21 @@
 )
 
 (about #_"LiteralExpr"
-    (def LiteralExpr'NIL   (list 'literal-expr nil))
-    (def LiteralExpr'TRUE  (list 'literal-expr true))
-    (def LiteralExpr'FALSE (list 'literal-expr false))
+    (def LiteralExpr'NIL   (list '&literal nil))
+    (def LiteralExpr'TRUE  (list '&literal true))
+    (def LiteralExpr'FALSE (list '&literal false))
 
     (defn LiteralExpr'parse [form, scope]
         (cond
-            (nil? (next form))         (-/throw! "too few arguments to quote")
-            (some? (next (next form))) (-/throw! "too many arguments to quote")
+            (nil? (next form))         (&throw! "too few arguments to quote")
+            (some? (next (next form))) (&throw! "too many arguments to quote")
         )
         (let [x (second form)]
             (cond
                 (nil? x)    LiteralExpr'NIL
                 (true? x)   LiteralExpr'TRUE
                 (false? x)  LiteralExpr'FALSE
-                'else      (list 'literal-expr x)
+                'else      (list '&literal x)
             )
         )
     )
@@ -784,15 +787,25 @@
 
     (defn IfExpr'parse [form, scope]
         (cond
-            (nil? (next (next (next form))))         (-/throw! "too few arguments to if")
-            (some? (next (next (next (next form))))) (-/throw! "too many arguments to if")
+            (nil? (next (next (next form))))         (&throw! "too few arguments to if")
+            (some? (next (next (next (next form))))) (&throw! "too many arguments to if")
         )
         (let [
             test (Compiler'analyze (second form), scope)
             then (Compiler'analyze (third form), scope)
             else (Compiler'analyze (fourth form), scope)
         ]
-            (list 'if-expr test then else)
+            (list '&if test then else)
+        )
+    )
+)
+
+(about #_"EmbedExpr"
+    (defn EmbedExpr'parse [form, scope]
+        (let [
+            args (map (fn [%] (Compiler'analyze %, scope)) (next form))
+        ]
+            (cons (first form) args)
         )
     )
 )
@@ -803,17 +816,7 @@
             fexpr (Compiler'analyze (first form), scope)
             args (map (fn [%] (Compiler'analyze %, scope)) (next form))
         ]
-            (list 'invoke-expr fexpr args)
-        )
-    )
-)
-
-(about #_"BodyExpr"
-    (defn BodyExpr'parse [form, scope]
-        (let [
-            exprs (map (fn [%] (Compiler'analyze %, scope)) (next form))
-        ]
-            (list 'body-expr exprs)
+            (list '&invoke fexpr args)
         )
     )
 )
@@ -832,24 +835,24 @@
                                         (= sym '&)
                                             (if (not variadic?)
                                                 (recur pars etal true (next s))
-                                                (-/throw! "overkill variadic parameter list")
+                                                (&throw! "overkill variadic parameter list")
                                             )
                                         (some? etal)
-                                            (-/throw! "excess variadic parameter " sym)
+                                            (&throw! "excess variadic parameter " sym)
                                         'else
                                             (if (not variadic?)
                                                 (recur (cons sym pars) etal variadic? (next s))
                                                 (recur           pars  sym  variadic? (next s))
                                             )
                                     )
-                                    (-/throw! "can't use alt name as parameter " sym)
+                                    (&throw! "can't use alt name as parameter " sym)
                                 )
-                                (-/throw! "function parameters must be symbols")
+                                (&throw! "function parameters must be symbols")
                             )
                         )
                         (if (or (not variadic?) (some? etal))
                             (list (reverse pars) etal)
-                            (-/throw! "missing variadic parameter")
+                            (&throw! "missing variadic parameter")
                         )
                     )
                 )
@@ -861,38 +864,23 @@
                         (if (some? etal) (cons etal scope) scope)
                     )
                 )
-            body (BodyExpr'parse (cons 'do (next form)), scope)
+            body (EmbedExpr'parse (cons '&do (next form)), scope)
         ]
-            (list 'fn-expr self pars etal body)
+            (list '&fn self pars etal body)
         )
     )
 )
 
 (about #_"DefExpr"
-    (def Beagle'ns (atom nil))
-
-    (defn DefExpr'lookupVar [sym]
-        (if (not (Symbol''alt? sym))
-            (or
-                (get (deref Beagle'ns) sym)
-                (let [v (Var'new)]
-                    (swap! Beagle'ns assoc sym v)
-                    v
-                )
-            )
-            (-/throw! "can't create defs for alt ns")
-        )
-    )
-
     (defn DefExpr'parse [form, scope]
         (cond
-            (nil? (next (next form)))         (-/throw! "too few arguments to def")
-            (some? (next (next (next form)))) (-/throw! "too many arguments to def")
+            (nil? (next (next form)))         (&throw! "too few arguments to def")
+            (some? (next (next (next form)))) (&throw! "too many arguments to def")
         )
         (let [s (symbol! (second form))]
             (if (symbol? s)
-                (list 'def-expr (DefExpr'lookupVar s) (Compiler'analyze (third form), scope))
-                (-/throw! "first argument to def must be a symbol")
+                (list '&var-set! (Var'lookup s) (Compiler'analyze (third form), scope))
+                (&throw! "first argument to def must be a symbol")
             )
         )
     )
@@ -901,25 +889,27 @@
 (about #_"Compiler"
     (def Compiler'specials
         (cons-map
-            '&          nil
             'def        DefExpr'parse
-            'do         BodyExpr'parse
             'fn         FnExpr'parse
             'if         IfExpr'parse
             'quote      LiteralExpr'parse
         )
     )
 
+    (defn Compiler'embed? [f]
+        (or (= f '&do) (= f '&binary) (= f '&identical?) (= f '&throw!))
+    )
+
     (def Compiler'macros
         (cons-map
-            'about      (fn [& s]   (cons 'do s))
+            'about      (fn [& s]   (cons '&do s))
             'declare    (fn [x]     (list 'def x nil))
-            'when       (fn [? & s] (list 'if ? (cons 'do s) nil))
+            'when       (fn [? & s] (list 'if ? (cons '&do s) nil))
             'cond       (fn [& s]   (when s (list 'if (first s) (second s) (cons 'cond (next (next s))))))
             'and        (fn [& s]   (if s (let [x (first s) s (next s)] (if s (list 'let (list '&and x) (list 'if '&and (cons 'and s) '&and)) x)) true))
             'or         (fn [& s]   (when s (let [x (first s) s (next s)] (if s (list 'let (list '&or x) (list 'if '&or '&or (cons 'or s))) x))))
             '->         (fn [x & s] (loop [x x s s] (if s (recur (let [f (first s)] (if (or (cons? f) (-/-seq? f)) (cons (first f) (cons x (next f))) (list f x))) (next s)) x)))
-            'let        (fn [a & s] (if (seq a) (list (list 'fn (list (first a)) (cons 'let (cons (next (next a)) s))) (second a)) (cons 'do s)))
+            'let        (fn [a & s] (if (seq a) (list (list 'fn (list (first a)) (cons 'let (cons (next (next a)) s))) (second a)) (cons '&do s)))
             'loop       (fn [a & s] (cons (cons 'fn (cons 'recur (cons (ConsMap''keys a) s))) (ConsMap''vals a)))
             'defn       (fn [f & s] (list 'def f (cons 'fn s)))
             'lazy-seq   (fn [& s]   (cons 'fn (cons [] s)))
@@ -944,18 +934,14 @@
     (defn Compiler'analyzeSymbol [sym, scope]
         (or
             (when (and (not (Symbol''alt? sym)) (some (fn [%] (= % sym)) scope))
-                (list 'binding-expr sym)
+                (list '&binding sym)
             )
-            (let [o
-                    (if (Symbol''alt? sym)
-                        (-/Namespace''findInternedVar (-/-the-ns (-/-symbol (apply -/-str "beagle.core"))), (-/-symbol (apply -/-str (Symbol''name sym))))
-                        (get (deref Beagle'ns) sym)
-                    )]
-                (if (some? o)
-                    (list 'var-expr o)
-                    (-/throw! "unable to resolve symbol " sym)
+            (let [v (Var'find sym)]
+                (when (some? v)
+                    (list '&var-get v)
                 )
             )
+            (&throw! "unable to resolve symbol " sym)
         )
     )
 
@@ -964,10 +950,10 @@
             (if (#_= identical? me form)
                 (let [op (first form)]
                     (if (some? op)
-                        (let [f'parse (or (get Compiler'specials op) InvokeExpr'parse)]
+                        (let [f'parse (or (get Compiler'specials op) (if (Compiler'embed? op) EmbedExpr'parse InvokeExpr'parse))]
                             (f'parse form scope)
                         )
-                        (-/throw! "can't call nil in form " form)
+                        (&throw! "can't call nil in form " form)
                     )
                 )
                 (Compiler'analyze me, scope)
@@ -982,7 +968,7 @@
             (false? form)                                         LiteralExpr'FALSE
             (or (symbol? form) (-/-symbol? form))                (Compiler'analyzeSymbol (symbol! form), scope)
             (or (cons? form) (and (-/-seq? form) (-/-seq form))) (Compiler'analyzeSeq form, scope)
-            'else                                                (list 'literal-expr form)
+            'else                                                (list '&literal form)
         )
     )
 
@@ -999,15 +985,18 @@
     (defn Machine'compute [form, env]
         (let [f (first form) f'compute (fn [%] (Machine'compute %, env))]
             (cond
-                (= f 'literal-expr) (second form)
-                (= f 'binding-expr) (get env (second form))
-                (= f 'var-expr)     (Var''get (second form))
-                (= f 'if-expr)      (f'compute (if (f'compute (second form)) (third form) (fourth form)))
-                (= f 'invoke-expr)  (apply (f'compute (second form)) (map f'compute (third form)))
-                (= f 'body-expr)    (last (map f'compute (second form)))
-                (= f 'fn-expr)      (Closure'new form, env)
-                (= f 'def-expr)     (Var''bindRoot (second form), (f'compute (third form)))
-                'else (-/throw! "Machine'compute not supported on " form)
+                (= f '&literal)    (second form)
+                (= f '&binding)    (get env (second form))
+                (= f '&var-get)    (Var''get (second form))
+                (= f '&if)         (f'compute (if (f'compute (second form)) (third form) (fourth form)))
+                (= f '&invoke)     (apply (f'compute (second form)) (map f'compute (third form)))
+                (= f '&do)         (last (map f'compute (next form)))
+                (= f '&fn)         (Closure'new form, env)
+                (= f '&var-set!)   (Var''set (second form), (f'compute (third form)))
+                (= f '&binary)     (-/binary (apply -/-str (Symbol''name (f'compute (second form)))))
+                (= f '&identical?) (-/identical? (f'compute (second form)) (f'compute (third form)))
+                (= f '&throw!)     (apply -/throw! (map (fn [%] (apply -/-str %)) (map f'compute (next form))))
+                'else              (&throw! "Machine'compute not supported on " form)
             )
         )
     )
@@ -1080,7 +1069,7 @@
         (loop [s (cons c nil)]
             (let [c (LispReader'read1 r)]
                 (if (or (nil? c) (LispReader'isWhitespace c) (LispReader'isTerminatingMacro c))
-                    (do
+                    (&do
                         (LispReader'unread r, c)
                         (String'new (reverse s))
                     )
@@ -1118,7 +1107,7 @@
             (= s "true")             true
             (= s "false")            false
             (LispReader'isSymbol s) (symbol s)
-            'else                   (-/throw! "invalid token " s)
+            'else                   (&throw! "invalid token " s)
         )
     )
 
@@ -1127,7 +1116,7 @@
             (let [c (loop [c (LispReader'read1 r)] (if (and (some? c) (LispReader'isWhitespace c)) (recur (LispReader'read1 r)) c))]
                 (cond
                     (nil? c)
-                        (-/throw! "EOF while reading")
+                        (&throw! "EOF while reading")
                     (and (some? delim) (= delim c))
                         delim!
                     'else
@@ -1164,9 +1153,9 @@
                     (= c Unicode'n)         Unicode'newline
                     (= c Unicode'backslash) c
                     (= c Unicode'quotation) c
-                    'else (-/throw! "unsupported escape character \\" c)
+                    'else                   (&throw! "unsupported escape character \\" c)
                 )
-                (-/throw! "EOF while reading string")
+                (&throw! "EOF while reading string")
             )
         )
     )
@@ -1179,7 +1168,7 @@
                         (String'new (reverse s))
                         (recur (cons (if (= c Unicode'backslash) (StringReader'escape r) c) s))
                     )
-                    (-/throw! "EOF while reading string")
+                    (&throw! "EOF while reading string")
                 )
             )
         )
@@ -1202,13 +1191,13 @@
                 (let [f'macro (get LispReader'dispatchMacros c)]
                     (if (some? f'macro)
                         (f'macro r scope c)
-                        (do
+                        (&do
                             (LispReader'unread r, c)
-                            (-/throw! "no dispatch macro for " c)
+                            (&throw! "no dispatch macro for " c)
                         )
                     )
                 )
-                (-/throw! "EOF while reading character")
+                (&throw! "EOF while reading character")
             )
         )
     )
@@ -1222,7 +1211,7 @@
     )
 
     (defn unmatched-delimiter-reader [_r, scope, delim]
-        (-/throw! "unmatched delimiter " delim)
+        (&throw! "unmatched delimiter " delim)
     )
 
     (def LispReader'macros
@@ -1242,7 +1231,7 @@
     )
 )
 
-(defn read [] (LispReader'read -/System'in, nil, nil, nil))
+(defn read [] (LispReader'read Beagle'in, nil, nil, nil))
 
 (defn repl []
     (let [esc Unicode'escape] (print (str esc "[31mBeagle " esc "[32m=> " esc "[0m")))
@@ -1250,3 +1239,5 @@
     (-> (read) (eval) (prn))
     (#_recur repl)
 )
+
+#_(repl)
