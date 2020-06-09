@@ -3,106 +3,86 @@
 )
 
 (ns beagle.bore
-    (:refer-clojure :only [*in* *ns* *out* = aget apply aset char char? class conj defn doseq first fn fn? import int keys let map merge meta neg? next not ns-imports ns-resolve ns-unmap number? object-array select-keys seq seq? seqable? some? str string? symbol symbol? the-ns var? var-get vary-meta when])
+    (:refer-clojure :only [*in* *out*])
     (:require [clojure.core :as -])
 )
 
-(-/defmacro import! [& syms-or-seqs] `(do (doseq [n# (keys (ns-imports *ns*))] (ns-unmap *ns* n#)) (import ~@syms-or-seqs)))
-
-(import!
-    [java.lang Error Integer String]
-    [clojure.lang Var]
-)
-
 (-/defmacro refer! [ns s]
-    (let [f (fn [%] (let [v (ns-resolve (the-ns ns) %) n (vary-meta % merge (select-keys (meta v) [:macro]))] `(def ~n ~(var-get v))))]
-        (if (symbol? s) (f s) (-/cons 'do (map f s)))
+    (-/let [f (-/fn [%] (-/let [v (-/ns-resolve (-/the-ns ns) %) n (-/vary-meta % -/merge (-/select-keys (-/meta v) [:macro]))] `(def ~n ~(-/var-get v))))]
+        (if (-/symbol? s) (f s) (-/cons 'do (-/map f s)))
     )
 )
 
-(refer! clojure.core [-> and cond cons defmacro identical? list memoize or time])
+(refer! clojure.core [-> = aget and apply aset char char? class cond conj cons declare defmacro defn first fn fn? identical? int let list loop neg? next not number? object-array or seq seq? seqable? some? str string? symbol symbol? the-ns time when])
 
-(defn throw! [& s] (throw (Error. (apply str s))))
+(defn &throw! [& s] (throw (Error. (apply str s))))
 
-(defn -append [_ x] (.append *out*, x) _)
-(defn -flush  [_]   (.flush *out*) _)
+(defn &bits [s] (char (Integer/parseInt (if (number? s) (str s) s), 2)))
+(def  &bits?     char?)
+(def  &bits=     =)
 
-(defn -unread [_ c] (.unread *in*, (int c)))
-(defn -read   [_]   (let [x (.read *in*)] (when (not (neg? x)) (char x))))
+(defn &read   [_]   (let [x (.read *in*)] (when (not (neg? x)) (char x))))
+(defn &unread [_ c] (.unread *in*, (int c)))
+(defn &append [_ x] (.append *out*, x) _)
+(defn &flush  [_]   (.flush *out*) _)
 
-(defn binary [s] (char (Integer/parseInt (if (number? s) (str s) s), 2)))
+(defn -var-find [s] (.findInternedVar (the-ns 'beagle.core), (symbol s)))
+(defn -var-get  [v] (.get v))
 
-(defn -var-find [^String s] (.findInternedVar (the-ns 'beagle.core), (symbol s)))
-(defn -var-get  [^Var this] (.get this))
+(def -=          =)
+(def -apply      apply)
+(def -conj       conj)
+(def -first      first)
+(def -fn?        fn?)
+(def &identical? identical?)
+(def -next       next)
+(def -seq        seq)
+(def -seq?       seq?)
+(def -seqable?   seqable?)
+(def -str        str)
+(def -string?    string?)
+(def -symbol?    symbol?)
 
-(def -=        =)
-(def -apply    apply)
-(def -char?    char?)
-(def -conj     conj)
-(def -first    first)
-(def -fn?      fn?)
-(def -next     next)
-(def -seq      seq)
-(def -seq?     seq?)
-(def -seqable? seqable?)
-(def -str      str)
-(def -string?  string?)
-(def -symbol?  symbol?)
-(def -var?     var?)
+(def t'atom    (&bits   '0))
+(def t'cons    (&bits   '1))
+(def t'string  (&bits  '10))
+(def t'symbol  (&bits  '11))
+(def t'closure (&bits '100))
 
-(defn -aget-0 [a] (aget a 0))
-(defn -aget-1 [a] (aget a 1))
-(defn -aget-2 [a] (aget a 2))
+(defn &car [s] (aget s 1))
+(defn &cdr [s] (aget s 2))
 
-(defn -anew-0 [] (object-array 0))
-(defn -anew-2 [] (object-array 2))
-(defn -anew-3 [] (object-array 3))
+(defn &volatile-cas-car! [a x y] (when (identical? (aget a 1) x) (aset a 1 y) a))
+(defn &volatile-get-car  [a]     (aget a 1))
+(defn &volatile-set-car! [a x]   (aset a 1 x) a)
 
-(defn -array? [x] (and (some? x) (.isArray (class x))))
+(defn &atom    [init]      (let [a (object-array 2)] (aset a 0 t'atom)    (&volatile-set-car! a init)))
+(defn &cons    [car cdr]   (let [a (object-array 3)] (aset a 0 t'cons)    (aset a 1 car)  (aset a 2 cdr)  a))
+(defn &string  [s]         (let [a (object-array 2)] (aset a 0 t'string)  (aset a 1 s)                    a))
+(defn &symbol  [name alt?] (let [a (object-array 3)] (aset a 0 t'symbol)  (aset a 1 name) (aset a 2 alt?) a))
+(defn &closure [fun env]   (let [a (object-array 3)] (aset a 0 t'closure) (aset a 1 fun)  (aset a 2 env)  a))
 
-(defn -aset-0! [a x] (aset a 0 x) a)
-(defn -aset-1! [a x] (aset a 1 x) a)
-(defn -aset-2! [a x] (aset a 2 x) a)
+(defn array? [x] (and (some? x) (.isArray (class x))))
 
-(defn -volatile-acas-1! [a x y] (when (identical? (-aget-1 a) x) (-aset-1! a y)))
-(defn -volatile-aget-1  [a]     (-aget-1 a))
-(defn -volatile-aset-1! [a x]   (-aset-1! a x))
-
-(def Atom'meta    (-anew-0))
-(def Cons'meta    (-anew-0))
-(def String'meta  (-anew-0))
-(def Symbol'meta  (-anew-0))
-(def Closure'meta (-anew-0))
+(defn &atom?    [x] (and (array? x) (= (aget x 0) t'atom)))
+(defn &cons?    [x] (and (array? x) (= (aget x 0) t'cons)))
+(defn &string?  [x] (and (array? x) (= (aget x 0) t'string)))
+(defn &symbol?  [x] (and (array? x) (= (aget x 0) t'symbol)))
+(defn &closure? [x] (and (array? x) (= (aget x 0) t'closure)))
 
 (ns beagle.core
     (:refer-clojure :only [])
     (:require [beagle.bore :as -])
 )
 
-(-/import!)
+(-/refer! beagle.bore [-> -= and &append -apply &atom &atom? &bits &bits? &bits= &car &cdr &closure &closure? cond -conj cons &cons &cons? declare defn -first &flush fn -fn? &identical? let list loop -next or &read -seq -seq? -seqable? -str &string &string? -string? &symbol &symbol? &throw! &unread -var-find -var-get &volatile-cas-car! &volatile-get-car &volatile-set-car! when])
 
-(-/refer! beagle.bore [-> -= Atom'meta Closure'meta Cons'meta String'meta Symbol'meta -aget-0 -aget-1 -aget-2 and -anew-0 -anew-2 -anew-3 -append -apply -array? -aset-0! -aset-1! -aset-2! binary -char? cond -conj cons -first -flush -fn? identical? list -next or -read -seq -seq? -seqable? -str -string? throw! -unread -var? -var-find -var-get -volatile-acas-1! -volatile-aget-1 -volatile-aset-1!])
-
-(-/defmacro about   [& s]   (-/cons 'do s))
-(-/defmacro declare [x]     (-/list 'def x nil))
-(-/defmacro when    [? & s] (-/list 'if ? (-/cons 'do s) nil))
-
-(-/defmacro fn   [& s] (-/cons 'fn* s))
-(-/defmacro let  [& s] (-/cons 'let* s))
-(-/defmacro loop [& s] (-/cons 'loop* s))
-
-(-/defmacro defn     [f & s] (-/list 'def f (-/cons 'fn s)))
-(-/defmacro lazy-seq [& s]   (-/cons 'fn (-/cons [] s)))
-
-(-/defmacro &do [& s] (-/cons 'do s))
-
-(def &binary     -/binary)
-(def &identical? -/identical?)
-(def &throw!     -/throw!)
+(-/defmacro about    [& s] (-/cons 'do s))
+(-/defmacro lazy-seq [& s] (-/cons 'fn (-/cons [] s)))
+(-/defmacro &do      [& s] (-/cons 'do s))
 
 (about #_"Beagle")
 
-(defn memoize  [x] x)
 (defn -symbol? [x] false)
 
 (defn identical? [x y] (&identical? x y))
@@ -174,30 +154,26 @@
 )
 
 (about #_"Atom"
-    (defn Atom'new [init]
-        (-> (-/-anew-2) (-/-aset-0! -/Atom'meta) (-/-volatile-aset-1! init))
-    )
+    (defn Atom'new [init] (&atom init))
 
-    (declare =)
-
-    (defn atom? [x] (and (-/-array? x) (-/-= (-/-aget-0 x) -/Atom'meta)))
+    (defn atom? [x] (&atom? x))
 
     (defn Atom''deref [this]
-        (-/-volatile-aget-1 this)
+        (&volatile-get-car this)
     )
 
     (declare apply)
 
     (defn Atom''swap [this, f, s]
         (loop []
-            (let [o (-/-volatile-aget-1 this) o' (apply f o s)]
-                (if (-/-volatile-acas-1! this o o') o' (recur))
+            (let [o (&volatile-get-car this) o' (apply f o s)]
+                (if (&volatile-cas-car! this o o') o' (recur))
             )
         )
     )
 
     (defn Atom''reset [this, o']
-        (-/-volatile-aset-1! this o')
+        (&volatile-set-car! this o')
         o'
     )
 )
@@ -226,14 +202,12 @@
 )
 
 (about #_"Cons"
-    (defn Cons'new [car, cdr]
-        (-> (-/-anew-3) (-/-aset-0! -/Cons'meta) (-/-aset-1! car) (-/-aset-2! cdr))
-    )
+    (defn Cons'new [car, cdr] (&cons car cdr))
 
-    (defn cons? [x] (and (-/-array? x) (-/-= (-/-aget-0 x) -/Cons'meta)))
+    (defn cons? [x] (&cons? x))
 
-    (defn Cons''car [this] (when (cons? this) (-/-aget-1 this)))
-    (defn Cons''cdr [this] (when (cons? this) (-/-aget-2 this)))
+    (defn Cons''car [this] (when (cons? this) (&car this)))
+    (defn Cons''cdr [this] (when (cons? this) (&cdr this)))
 
     (defn Cons''seq [this]
         this
@@ -241,6 +215,8 @@
 
     (defn Cons''first [this]      (Cons''car this))
     (defn Cons''next  [this] (seq (Cons''cdr this)))
+
+    (declare =)
 
     (defn Cons''equals [this, that]
         (or (identical? this that)
@@ -372,13 +348,11 @@
 (defn update [m k f & s] (assoc m k (apply f (get m k) s)))
 
 (about #_"String"
-    (defn String'new [s]
-        (-> (-/-anew-2) (-/-aset-0! -/String'meta) (-/-aset-1! s))
-    )
+    (defn String'new [s] (&string s))
 
-    (defn string? [x] (and (-/-array? x) (-/-= (-/-aget-0 x) -/String'meta)))
+    (defn string? [x] (&string? x))
 
-    (defn String''s [this] (when (string? this) (-/-aget-1 this)))
+    (defn String''s [this] (when (string? this) (&car this)))
 
     (defn String''seq [this] (seq (String''s this)))
 
@@ -399,14 +373,12 @@
 (defn string [s] (cond (string? s) s (-/-string? s) (String'new s) 'else (String'new (-/-str s))))
 
 (about #_"Symbol"
-    (defn Symbol'new [name, alt?]
-        (-> (-/-anew-3) (-/-aset-0! -/Symbol'meta) (-/-aset-1! name) (-/-aset-2! alt?))
-    )
+    (defn Symbol'new [name, alt?] (&symbol name alt?))
 
-    (defn symbol? [x] (and (-/-array? x) (-/-= (-/-aget-0 x) -/Symbol'meta)))
+    (defn symbol? [x] (&symbol? x))
 
-    (defn Symbol''name [this] (when (symbol? this) (-/-aget-1 this)))
-    (defn Symbol''alt? [this] (when (symbol? this) (-/-aget-2 this)))
+    (defn Symbol''name [this] (when (symbol? this) (&car this)))
+    (defn Symbol''alt? [this] (when (symbol? this) (&cdr this)))
 
     (declare Unicode'minus)
     (declare Unicode'slash)
@@ -418,8 +390,6 @@
             (Symbol'new (string (if alt? (next (next s)) s)), alt?)
         )
     )
-
-    (def Symbol'create (-/memoize Symbol'create))
 
     (defn Symbol''equals [this, that]
         (or (identical? this that)
@@ -436,104 +406,104 @@
 (defn symbol [s] (cond (symbol? s) s (-/-symbol? s) (Symbol'create (-/-str s)) 'else (Symbol'create s)))
 
 (about #_"unicode"
-    (defn binary [s] (&binary s))
+    (defn bits [s] (&bits s))
 
-    (def Unicode'newline     (binary    '1010))
-    (def Unicode'escape      (binary   '11011))
-    (def Unicode'space       (binary  '100000))
-    (def Unicode'exclamation (binary  '100001))
-    (def Unicode'quotation   (binary  '100010))
-    (def Unicode'hash        (binary  '100011))
-    (def Unicode'percent     (binary  '100101))
-    (def Unicode'ampersand   (binary  '100110))
-    (def Unicode'apostrophe  (binary  '100111))
-    (def Unicode'lparen      (binary  '101000))
-    (def Unicode'rparen      (binary  '101001))
-    (def Unicode'asterisk    (binary  '101010))
-    (def Unicode'comma       (binary  '101100))
-    (def Unicode'minus       (binary  '101101))
-    (def Unicode'slash       (binary  '101111))
-    (def Unicode'0           (binary  '110000))
-    (def Unicode'1           (binary  '110001))
-    (def Unicode'2           (binary  '110010))
-    (def Unicode'3           (binary  '110011))
-    (def Unicode'4           (binary  '110100))
-    (def Unicode'5           (binary  '110101))
-    (def Unicode'6           (binary  '110110))
-    (def Unicode'7           (binary  '110111))
-    (def Unicode'8           (binary  '111000))
-    (def Unicode'9           (binary  '111001))
-    (def Unicode'equals      (binary  '111101))
-    (def Unicode'greater     (binary  '111110))
-    (def Unicode'question    (binary  '111111))
-    (def Unicode'A           (binary '1000001))
-    (def Unicode'B           (binary '1000010))
-    (def Unicode'C           (binary '1000011))
-    (def Unicode'D           (binary '1000100))
-    (def Unicode'E           (binary '1000101))
-    (def Unicode'F           (binary '1000110))
-    (def Unicode'G           (binary '1000111))
-    (def Unicode'H           (binary '1001000))
-    (def Unicode'I           (binary '1001001))
-    (def Unicode'J           (binary '1001010))
-    (def Unicode'K           (binary '1001011))
-    (def Unicode'L           (binary '1001100))
-    (def Unicode'M           (binary '1001101))
-    (def Unicode'N           (binary '1001110))
-    (def Unicode'O           (binary '1001111))
-    (def Unicode'P           (binary '1010000))
-    (def Unicode'Q           (binary '1010001))
-    (def Unicode'R           (binary '1010010))
-    (def Unicode'S           (binary '1010011))
-    (def Unicode'T           (binary '1010100))
-    (def Unicode'U           (binary '1010101))
-    (def Unicode'V           (binary '1010110))
-    (def Unicode'W           (binary '1010111))
-    (def Unicode'X           (binary '1011000))
-    (def Unicode'Y           (binary '1011001))
-    (def Unicode'Z           (binary '1011010))
-    (def Unicode'lbracket    (binary '1011011))
-    (def Unicode'backslash   (binary '1011100))
-    (def Unicode'rbracket    (binary '1011101))
-    (def Unicode'underscore  (binary '1011111))
-    (def Unicode'grave       (binary '1100000))
-    (def Unicode'a           (binary '1100001))
-    (def Unicode'b           (binary '1100010))
-    (def Unicode'c           (binary '1100011))
-    (def Unicode'd           (binary '1100100))
-    (def Unicode'e           (binary '1100101))
-    (def Unicode'f           (binary '1100110))
-    (def Unicode'g           (binary '1100111))
-    (def Unicode'h           (binary '1101000))
-    (def Unicode'i           (binary '1101001))
-    (def Unicode'j           (binary '1101010))
-    (def Unicode'k           (binary '1101011))
-    (def Unicode'l           (binary '1101100))
-    (def Unicode'm           (binary '1101101))
-    (def Unicode'n           (binary '1101110))
-    (def Unicode'o           (binary '1101111))
-    (def Unicode'p           (binary '1110000))
-    (def Unicode'q           (binary '1110001))
-    (def Unicode'r           (binary '1110010))
-    (def Unicode's           (binary '1110011))
-    (def Unicode't           (binary '1110100))
-    (def Unicode'u           (binary '1110101))
-    (def Unicode'v           (binary '1110110))
-    (def Unicode'w           (binary '1110111))
-    (def Unicode'x           (binary '1111000))
-    (def Unicode'y           (binary '1111001))
-    (def Unicode'z           (binary '1111010))
+    (defn bits? [x] (&bits? x))
+
+    (def Unicode'newline     (bits    '1010))
+    (def Unicode'escape      (bits   '11011))
+    (def Unicode'space       (bits  '100000))
+    (def Unicode'exclamation (bits  '100001))
+    (def Unicode'quotation   (bits  '100010))
+    (def Unicode'hash        (bits  '100011))
+    (def Unicode'percent     (bits  '100101))
+    (def Unicode'ampersand   (bits  '100110))
+    (def Unicode'apostrophe  (bits  '100111))
+    (def Unicode'lparen      (bits  '101000))
+    (def Unicode'rparen      (bits  '101001))
+    (def Unicode'asterisk    (bits  '101010))
+    (def Unicode'comma       (bits  '101100))
+    (def Unicode'minus       (bits  '101101))
+    (def Unicode'slash       (bits  '101111))
+    (def Unicode'0           (bits  '110000))
+    (def Unicode'1           (bits  '110001))
+    (def Unicode'2           (bits  '110010))
+    (def Unicode'3           (bits  '110011))
+    (def Unicode'4           (bits  '110100))
+    (def Unicode'5           (bits  '110101))
+    (def Unicode'6           (bits  '110110))
+    (def Unicode'7           (bits  '110111))
+    (def Unicode'8           (bits  '111000))
+    (def Unicode'9           (bits  '111001))
+    (def Unicode'equals      (bits  '111101))
+    (def Unicode'greater     (bits  '111110))
+    (def Unicode'question    (bits  '111111))
+    (def Unicode'A           (bits '1000001))
+    (def Unicode'B           (bits '1000010))
+    (def Unicode'C           (bits '1000011))
+    (def Unicode'D           (bits '1000100))
+    (def Unicode'E           (bits '1000101))
+    (def Unicode'F           (bits '1000110))
+    (def Unicode'G           (bits '1000111))
+    (def Unicode'H           (bits '1001000))
+    (def Unicode'I           (bits '1001001))
+    (def Unicode'J           (bits '1001010))
+    (def Unicode'K           (bits '1001011))
+    (def Unicode'L           (bits '1001100))
+    (def Unicode'M           (bits '1001101))
+    (def Unicode'N           (bits '1001110))
+    (def Unicode'O           (bits '1001111))
+    (def Unicode'P           (bits '1010000))
+    (def Unicode'Q           (bits '1010001))
+    (def Unicode'R           (bits '1010010))
+    (def Unicode'S           (bits '1010011))
+    (def Unicode'T           (bits '1010100))
+    (def Unicode'U           (bits '1010101))
+    (def Unicode'V           (bits '1010110))
+    (def Unicode'W           (bits '1010111))
+    (def Unicode'X           (bits '1011000))
+    (def Unicode'Y           (bits '1011001))
+    (def Unicode'Z           (bits '1011010))
+    (def Unicode'lbracket    (bits '1011011))
+    (def Unicode'backslash   (bits '1011100))
+    (def Unicode'rbracket    (bits '1011101))
+    (def Unicode'underscore  (bits '1011111))
+    (def Unicode'grave       (bits '1100000))
+    (def Unicode'a           (bits '1100001))
+    (def Unicode'b           (bits '1100010))
+    (def Unicode'c           (bits '1100011))
+    (def Unicode'd           (bits '1100100))
+    (def Unicode'e           (bits '1100101))
+    (def Unicode'f           (bits '1100110))
+    (def Unicode'g           (bits '1100111))
+    (def Unicode'h           (bits '1101000))
+    (def Unicode'i           (bits '1101001))
+    (def Unicode'j           (bits '1101010))
+    (def Unicode'k           (bits '1101011))
+    (def Unicode'l           (bits '1101100))
+    (def Unicode'm           (bits '1101101))
+    (def Unicode'n           (bits '1101110))
+    (def Unicode'o           (bits '1101111))
+    (def Unicode'p           (bits '1110000))
+    (def Unicode'q           (bits '1110001))
+    (def Unicode'r           (bits '1110010))
+    (def Unicode's           (bits '1110011))
+    (def Unicode't           (bits '1110100))
+    (def Unicode'u           (bits '1110101))
+    (def Unicode'v           (bits '1110110))
+    (def Unicode'w           (bits '1110111))
+    (def Unicode'x           (bits '1111000))
+    (def Unicode'y           (bits '1111001))
+    (def Unicode'z           (bits '1111010))
 )
 
 (about #_"Closure"
-    (defn Closure'new [fun, env]
-        (-> (-/-anew-3) (-/-aset-0! -/Closure'meta) (-/-aset-1! fun) (-/-aset-2! env))
-    )
+    (defn Closure'new [fun, env] (&closure fun env))
 
-    (defn closure? [x] (and (-/-array? x) (-/-= (-/-aget-0 x) -/Closure'meta)))
+    (defn closure? [x] (&closure? x))
 
-    (defn Closure''fun [this] (when (closure? this) (-/-aget-1 this)))
-    (defn Closure''env [this] (when (closure? this) (-/-aget-2 this)))
+    (defn Closure''fun [this] (when (closure? this) (&car this)))
+    (defn Closure''env [this] (when (closure? this) (&cdr this)))
 
     (declare Machine'compute)
 
@@ -602,7 +572,7 @@
     )
 
     (defn Var''get [this]
-        (if (-/-var? this) (-/-var-get this) (deref this))
+        (if (atom? this) (deref this) (-/-var-get this))
     )
 
     (defn Var''set [this, root]
@@ -615,7 +585,7 @@
     (cond
         (identical? x y) true
         (or (nil? x) (nil? y) (true? x) (true? y) (false? x) (false? y)) false
-        (-/-char? x)     (-/-= x y)
+        (or (bits? x) (bits? y)) (&bits= x y)
         (symbol? x)      (Symbol''equals x, (symbol! y))
         (symbol? y)      (Symbol''equals y, (symbol! x))
         (-/-symbol? x)   (-/-= x y)
@@ -633,11 +603,12 @@
     (def Beagle'out nil)
 
     (defn append' [a x]
-        (cond
-            (nil? a)                        (-/-append a (if (string? x) (apply -/-str x) x))
-            (-/-char? x)                    (conj a x)
-            (or (string? x) (-/-string? x)) (reduce conj a x)
-            'else                           (&throw! "append' not supported for " x)
+        (let [f'append (if (some? a) conj (fn [%1 %2] (&append %1 %2)))]
+            (cond
+                (bits? x)                       (f'append a x)
+                (or (string? x) (-/-string? x)) (reduce f'append a x)
+                'else                           (&throw! "append' not supported for " x)
+            )
         )
     )
 
@@ -712,7 +683,7 @@
     )
 
     (defn append! [a x]
-        (if (or (string? x) (-/-string? x) (-/-char? x)) (append' a x) (append a x))
+        (if (or (bits? x) (string? x) (-/-string? x)) (append' a x) (append a x))
     )
 
     (defn str [& s]
@@ -729,7 +700,7 @@
     (defn space   [] (append' Beagle'out Unicode'space)   nil)
     (defn newline [] (append' Beagle'out Unicode'newline) nil)
 
-    (defn flush [] (-/-flush Beagle'out) nil)
+    (defn flush [] (&flush Beagle'out) nil)
 
     (defn pr [& s]
         (when (some? s)
@@ -897,7 +868,16 @@
     )
 
     (defn Compiler'embed? [f]
-        (or (= f '&do) (= f '&binary) (= f '&identical?) (= f '&throw!))
+        (or (= f '&do)
+            (= f '&bits) (= f '&bits?) (= f '&bits=)
+            (= f '&identical?)
+            (= f '&read) (= f '&unread) (= f '&append) (= f '&flush)
+            (= f '&car) (= f '&cdr)
+            (= f '&atom?) (= f '&cons?) (= f '&string?) (= f '&symbol?) (= f '&closure?)
+            (= f '&atom) (= f '&cons) (= f '&string) (= f '&symbol) (= f '&closure)
+            (= f '&volatile-cas-car!) (= f '&volatile-get-car) (= f '&volatile-set-car!)
+            (= f '&throw!)
+        )
     )
 
     (def Compiler'macros
@@ -987,16 +967,45 @@
             (cond
                 (= f '&literal)    (second form)
                 (= f '&binding)    (get env (second form))
-                (= f '&var-get)    (Var''get (second form))
                 (= f '&if)         (f'compute (if (f'compute (second form)) (third form) (fourth form)))
                 (= f '&invoke)     (apply (f'compute (second form)) (map f'compute (third form)))
-                (= f '&do)         (last (map f'compute (next form)))
                 (= f '&fn)         (Closure'new form, env)
+
+                (= f '&var-get)    (Var''get (second form))
                 (= f '&var-set!)   (Var''set (second form), (f'compute (third form)))
-                (= f '&binary)     (-/binary (apply -/-str (Symbol''name (f'compute (second form)))))
-                (= f '&identical?) (-/identical? (f'compute (second form)) (f'compute (third form)))
-                (= f '&throw!)     (apply -/throw! (map (fn [%] (apply -/-str %)) (map f'compute (next form))))
-                'else              (&throw! "Machine'compute not supported on " form)
+
+                (= f '&do)         (last (map f'compute (next form)))
+                (= f '&bits)       (-/&bits (apply -/-str (Symbol''name (f'compute (second form)))))
+                (= f '&bits?)      (-/&bits? (f'compute (second form)))
+                (= f '&bits=)      (-/&bits= (f'compute (second form)) (f'compute (third form)))
+                (= f '&identical?) (-/&identical? (f'compute (second form)) (f'compute (third form)))
+
+                (= f '&read)       (-/&read (f'compute (second form)))
+                (= f '&unread)     (-/&unread (f'compute (second form)) (f'compute (third form)))
+                (= f '&append)     (-/&append (f'compute (second form)) (f'compute (third form)))
+                (= f '&flush)      (-/&flush (f'compute (second form)))
+
+                (= f '&car)        (-/&car (f'compute (second form)))
+                (= f '&cdr)        (-/&cdr (f'compute (second form)))
+
+                (= f '&atom?)      (-/&atom? (f'compute (second form)))
+                (= f '&cons?)      (-/&cons? (f'compute (second form)))
+                (= f '&string?)    (-/&string? (f'compute (second form)))
+                (= f '&symbol?)    (-/&symbol? (f'compute (second form)))
+                (= f '&closure?)   (-/&closure? (f'compute (second form)))
+
+                (= f '&atom)       (-/&atom (f'compute (second form)))
+                (= f '&cons)       (-/&cons (f'compute (second form)) (f'compute (third form)))
+                (= f '&string)     (-/&string (f'compute (second form)))
+                (= f '&symbol)     (-/&symbol (f'compute (second form)) (f'compute (third form)))
+                (= f '&closure)    (-/&closure (f'compute (second form)) (f'compute (third form)))
+
+                (= f '&volatile-cas-car!) (-/&volatile-cas-car! (f'compute (second form)) (f'compute (third form)) (f'compute (fourth form)))
+                (= f '&volatile-get-car)  (-/&volatile-get-car (f'compute (second form)))
+                (= f '&volatile-set-car!) (-/&volatile-set-car! (f'compute (second form)) (f'compute (third form)))
+
+                (= f '&throw!)     (apply -/&throw! (map (fn [%] (apply -/-str %)) (map f'compute (next form))))
+                'else              (-/&throw! "Machine'compute not supported on " form)
             )
         )
     )
@@ -1048,19 +1057,19 @@
         (or (= c Unicode'0) (= c Unicode'1) (= c Unicode'2) (= c Unicode'3) (= c Unicode'4) (= c Unicode'5) (= c Unicode'6) (= c Unicode'7) (= c Unicode'8) (= c Unicode'9))
     )
 
-    (def LispReader'naught (binary '11111))
+    (def LispReader'naught (bits '11111))
 
     (defn LispReader'isWhitespace [c]
         (or (= c Unicode'space) (= c Unicode'comma) (= c Unicode'newline) (= c LispReader'naught))
     )
 
     (defn LispReader'read1 [r]
-        (-/-read r)
+        (&read r)
     )
 
     (defn LispReader'unread [r, c]
         (when (some? c)
-            (-/-unread r c)
+            (&unread r c)
         )
         nil
     )
@@ -1133,7 +1142,7 @@
         )
     )
 
-    (def LispReader'READ_FINISHED (-/-anew-0))
+    (def LispReader'READ_FINISHED (atom nil))
 
     (defn LispReader'readDelimitedForms [r, scope, delim]
         (loop [z nil]
