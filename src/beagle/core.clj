@@ -75,15 +75,28 @@
     (:require [beagle.bore :as -])
 )
 
-(-/refer! beagle.bore [-> -= and &append -apply &atom &atom? &bits &bits? &bits= &car &cdr &closure &closure? cond -conj cons &cons &cons? declare defn -first &flush fn -fn? &identical? let list loop -next or &read -seq -seq? -seqable? -str &string &string? -string? &symbol &symbol? &throw! &unread -var-find -var-get &volatile-cas-car! &volatile-get-car &volatile-set-car! when])
+(-/refer! beagle.bore [-> and &append &atom &atom? &bits &bits? &bits= &car &cdr &closure &closure? cond cons &cons &cons? declare defn &flush fn &identical? let list loop or &read &string &string? &symbol &symbol? &throw! &unread &volatile-cas-car! &volatile-get-car &volatile-set-car! when])
+
+(defn -=        [_ _]                      (&throw! "-= non più"))
+(defn -apply    [_ _]                      (&throw! "-apply non più"))
+(defn -conj     [_ _]                      (&throw! "-conj non più"))
+(defn -first    [_]                        (&throw! "-first non più"))
+(defn -fn?      [x]   (and (-/-fn? x)      (&throw! "-fn? non più")))
+(defn -next     [_]                        (&throw! "-next non più"))
+(defn -seq      [_]                        (&throw! "-seq non più"))
+(defn -seq?     [x]   (and (-/-seq? x)     (&throw! "-seq? non più")))
+(defn -seqable? [x]   (and (-/-seqable? x) (&throw! "-seqable? non più")))
+(defn -str      [& _]                      (&throw! "-str non più"))
+(defn -string?  [x]   (and (-/-string? x)  (&throw! "-string? non più")))
+(defn -symbol?  [x]   (and (-/-symbol? x)  (&throw! "-symbol? non più")))
+(defn -var-find [_]                        (&throw! "-var-find non più"))
+(defn -var-get  [_]                        (&throw! "-var-get non più"))
 
 (-/defmacro about    [& s] (-/cons 'do s))
 (-/defmacro lazy-seq [& s] (-/cons 'fn (-/cons [] s)))
 (-/defmacro &do      [& s] (-/cons 'do s))
 
 (about #_"Beagle")
-
-(defn -symbol? [x] false)
 
 (defn identical? [x y] (&identical? x y))
 
@@ -370,7 +383,7 @@
     )
 )
 
-(defn string [s] (cond (string? s) s (-/-string? s) (String'new s) 'else (String'new (-/-str s))))
+(defn string [s] (cond (string? s) s (-/-string? s) (String'new s) 'else (String'new (apply -/-str s))))
 
 (about #_"Symbol"
     (defn Symbol'new [name, alt?] (&symbol name alt?))
@@ -588,10 +601,10 @@
         (or (bits? x) (bits? y)) (&bits= x y)
         (symbol? x)      (Symbol''equals x, (symbol! y))
         (symbol? y)      (Symbol''equals y, (symbol! x))
-        (-/-symbol? x)   (-/-= x y)
+        (or (-/-symbol? x) (-/-symbol? y)) (-/-= x y)
         (string? x)      (String''equals x, y)
         (string? y)      (String''equals y, x)
-        (-/-string? x)   (-/-= x y)
+        (or (-/-string? x) (-/-string? y)) (-/-= x y)
         (cons? x)        (Cons''equals x, y)
         (cons? y)        (Cons''equals y, x)
         'else            (&throw! "= not supported on " x ", not even on " y)
@@ -599,7 +612,7 @@
 )
 
 (about #_"append"
-    (def Beagle'in  nil)
+    (def Beagle'in  (atom nil))
     (def Beagle'out nil)
 
     (defn append' [a x]
@@ -858,47 +871,47 @@
 )
 
 (about #_"Compiler"
-    (def Compiler'specials
-        (cons-map
-            'def        DefExpr'parse
-            'fn         FnExpr'parse
-            'if         IfExpr'parse
-            'quote      LiteralExpr'parse
+    (defn Compiler'special [s]
+        (cond
+            (= s 'def)   DefExpr'parse
+            (= s 'fn)    FnExpr'parse
+            (= s 'if)    IfExpr'parse
+            (= s 'quote) LiteralExpr'parse
         )
     )
 
-    (defn Compiler'embed? [f]
-        (or (= f '&do)
-            (= f '&bits) (= f '&bits?) (= f '&bits=)
-            (= f '&identical?)
-            (= f '&read) (= f '&unread) (= f '&append) (= f '&flush)
-            (= f '&car) (= f '&cdr)
-            (= f '&atom?) (= f '&cons?) (= f '&string?) (= f '&symbol?) (= f '&closure?)
-            (= f '&atom) (= f '&cons) (= f '&string) (= f '&symbol) (= f '&closure)
-            (= f '&volatile-cas-car!) (= f '&volatile-get-car) (= f '&volatile-set-car!)
-            (= f '&throw!)
+    (defn Compiler'embed? [e]
+        (or (= e '&do)
+            (= e '&bits) (= e '&bits?) (= e '&bits=)
+            (= e '&identical?)
+            (= e '&read) (= e '&unread) (= e '&append) (= e '&flush)
+            (= e '&car) (= e '&cdr)
+            (= e '&atom?) (= e '&cons?) (= e '&string?) (= e '&symbol?) (= e '&closure?)
+            (= e '&atom) (= e '&cons) (= e '&string) (= e '&symbol) (= e '&closure)
+            (= e '&volatile-cas-car!) (= e '&volatile-get-car) (= e '&volatile-set-car!)
+            (= e '&throw!)
         )
     )
 
-    (def Compiler'macros
-        (cons-map
-            'about      (fn [& s]   (cons '&do s))
-            'declare    (fn [x]     (list 'def x nil))
-            'when       (fn [? & s] (list 'if ? (cons '&do s) nil))
-            'cond       (fn [& s]   (when s (list 'if (first s) (second s) (cons 'cond (next (next s))))))
-            'and        (fn [& s]   (if s (let [x (first s) s (next s)] (if s (list 'let (list '&and x) (list 'if '&and (cons 'and s) '&and)) x)) true))
-            'or         (fn [& s]   (when s (let [x (first s) s (next s)] (if s (list 'let (list '&or x) (list 'if '&or '&or (cons 'or s))) x))))
-            '->         (fn [x & s] (loop [x x s s] (if s (recur (let [f (first s)] (if (or (cons? f) (-/-seq? f)) (cons (first f) (cons x (next f))) (list f x))) (next s)) x)))
-            'let        (fn [a & s] (if (seq a) (list (list 'fn (list (first a)) (cons 'let (cons (next (next a)) s))) (second a)) (cons '&do s)))
-            'loop       (fn [a & s] (cons (cons 'fn (cons 'recur (cons (ConsMap''keys a) s))) (ConsMap''vals a)))
-            'defn       (fn [f & s] (list 'def f (cons 'fn s)))
-            'lazy-seq   (fn [& s]   (cons 'fn (cons [] s)))
+    (defn Compiler'macro [m]
+        (cond
+            (= m 'about)    (fn [& s]   (cons '&do s))
+            (= m 'declare)  (fn [x]     (list 'def x nil))
+            (= m 'when)     (fn [? & s] (list 'if ? (cons '&do s) nil))
+            (= m 'cond)     (fn [& s]   (when s (list 'if (first s) (second s) (cons 'cond (next (next s))))))
+            (= m 'and)      (fn [& s]   (if s (let [x (first s) s (next s)] (if s (list 'let (list '&and x) (list 'if '&and (cons 'and s) '&and)) x)) true))
+            (= m 'or)       (fn [& s]   (when s (let [x (first s) s (next s)] (if s (list 'let (list '&or x) (list 'if '&or '&or (cons 'or s))) x))))
+            (= m '->)       (fn [x & s] (loop [x x s s] (if s (recur (let [f (first s)] (if (or (cons? f) (-/-seq? f)) (cons (first f) (cons x (next f))) (list f x))) (next s)) x)))
+            (= m 'let)      (fn [a & s] (if (seq a) (list (list 'fn (list (first a)) (cons 'let (cons (next (next a)) s))) (second a)) (cons '&do s)))
+            (= m 'loop)     (fn [a & s] (cons (cons 'fn (cons 'recur (cons (ConsMap''keys a) s))) (ConsMap''vals a)))
+            (= m 'defn)     (fn [f & s] (list 'def f (cons 'fn s)))
+            (= m 'lazy-seq) (fn [& s]   (cons 'fn (cons [] s)))
         )
     )
 
     (defn Compiler'macroexpand1 [form]
         (if (or (cons? form) (-/-seq? form))
-            (let [f'macro (get Compiler'macros (first form))]
+            (let [f'macro (Compiler'macro (first form))]
                 (if (some? f'macro) (apply f'macro (next form)) form)
             )
             form
@@ -930,7 +943,7 @@
             (if (#_= identical? me form)
                 (let [op (first form)]
                     (if (some? op)
-                        (let [f'parse (or (get Compiler'specials op) (if (Compiler'embed? op) EmbedExpr'parse InvokeExpr'parse))]
+                        (let [f'parse (or (Compiler'special op) (if (Compiler'embed? op) EmbedExpr'parse InvokeExpr'parse))]
                             (f'parse form scope)
                         )
                         (&throw! "can't call nil in form " form)
@@ -962,60 +975,65 @@
 (defn eval [form] (Compiler'eval form))
 
 (about #_"machine"
+    (defn &embed [f s]
+        (cond
+            (= f '&do)         (last s)
+
+            (= f '&bits)       (-/&bits (apply -/-str (Symbol''name (first s))))
+            (= f '&bits?)      (-/&bits? (first s))
+            (= f '&bits=)      (-/&bits= (first s) (second s))
+            (= f '&identical?) (-/&identical? (first s) (second s))
+
+            (= f '&read)       (-/&read (first s))
+            (= f '&unread)     (-/&unread (first s) (second s))
+            (= f '&append)     (-/&append (first s) (second s))
+            (= f '&flush)      (-/&flush (first s))
+
+            (= f '&car)        (-/&car (first s))
+            (= f '&cdr)        (-/&cdr (first s))
+
+            (= f '&atom?)      (-/&atom? (first s))
+            (= f '&cons?)      (-/&cons? (first s))
+            (= f '&string?)    (-/&string? (first s))
+            (= f '&symbol?)    (-/&symbol? (first s))
+            (= f '&closure?)   (-/&closure? (first s))
+
+            (= f '&atom)       (-/&atom (first s))
+            (= f '&cons)       (-/&cons (first s) (second s))
+            (= f '&string)     (-/&string (first s))
+            (= f '&symbol)     (-/&symbol (first s) (second s))
+            (= f '&closure)    (-/&closure (first s) (second s))
+
+            (= f '&volatile-cas-car!) (-/&volatile-cas-car! (first s) (second s) (third s))
+            (= f '&volatile-get-car)  (-/&volatile-get-car (first s))
+            (= f '&volatile-set-car!) (-/&volatile-set-car! (first s) (second s))
+
+            (= f '&throw!)     (apply -/&throw! (map (fn [%] (apply -/-str %)) s))
+            'else              (-/&throw! "&embed not supported on " f)
+        )
+    )
+
     (defn Machine'compute [form, env]
         (let [f (first form) f'compute (fn [%] (Machine'compute %, env))]
             (cond
-                (= f '&literal)    (second form)
-                (= f '&binding)    (get env (second form))
-                (= f '&if)         (f'compute (if (f'compute (second form)) (third form) (fourth form)))
-                (= f '&invoke)     (apply (f'compute (second form)) (map f'compute (third form)))
-                (= f '&fn)         (Closure'new form, env)
-
-                (= f '&var-get)    (Var''get (second form))
-                (= f '&var-set!)   (Var''set (second form), (f'compute (third form)))
-
-                (= f '&do)         (last (map f'compute (next form)))
-                (= f '&bits)       (-/&bits (apply -/-str (Symbol''name (f'compute (second form)))))
-                (= f '&bits?)      (-/&bits? (f'compute (second form)))
-                (= f '&bits=)      (-/&bits= (f'compute (second form)) (f'compute (third form)))
-                (= f '&identical?) (-/&identical? (f'compute (second form)) (f'compute (third form)))
-
-                (= f '&read)       (-/&read (f'compute (second form)))
-                (= f '&unread)     (-/&unread (f'compute (second form)) (f'compute (third form)))
-                (= f '&append)     (-/&append (f'compute (second form)) (f'compute (third form)))
-                (= f '&flush)      (-/&flush (f'compute (second form)))
-
-                (= f '&car)        (-/&car (f'compute (second form)))
-                (= f '&cdr)        (-/&cdr (f'compute (second form)))
-
-                (= f '&atom?)      (-/&atom? (f'compute (second form)))
-                (= f '&cons?)      (-/&cons? (f'compute (second form)))
-                (= f '&string?)    (-/&string? (f'compute (second form)))
-                (= f '&symbol?)    (-/&symbol? (f'compute (second form)))
-                (= f '&closure?)   (-/&closure? (f'compute (second form)))
-
-                (= f '&atom)       (-/&atom (f'compute (second form)))
-                (= f '&cons)       (-/&cons (f'compute (second form)) (f'compute (third form)))
-                (= f '&string)     (-/&string (f'compute (second form)))
-                (= f '&symbol)     (-/&symbol (f'compute (second form)) (f'compute (third form)))
-                (= f '&closure)    (-/&closure (f'compute (second form)) (f'compute (third form)))
-
-                (= f '&volatile-cas-car!) (-/&volatile-cas-car! (f'compute (second form)) (f'compute (third form)) (f'compute (fourth form)))
-                (= f '&volatile-get-car)  (-/&volatile-get-car (f'compute (second form)))
-                (= f '&volatile-set-car!) (-/&volatile-set-car! (f'compute (second form)) (f'compute (third form)))
-
-                (= f '&throw!)     (apply -/&throw! (map (fn [%] (apply -/-str %)) (map f'compute (next form))))
-                'else              (-/&throw! "Machine'compute not supported on " form)
+                (= f '&literal)  (second form)
+                (= f '&binding)  (get env (second form))
+                (= f '&if)       (f'compute (if (f'compute (second form)) (third form) (fourth form)))
+                (= f '&invoke)   (apply (f'compute (second form)) (map f'compute (third form)))
+                (= f '&fn)       (Closure'new form, env)
+                (= f '&var-get)  (Var''get (second form))
+                (= f '&var-set!) (Var''set (second form), (f'compute (third form)))
+                'else            (&embed f (map f'compute (next form)))
             )
         )
     )
 )
 
 (about #_"LispReader"
-    (declare LispReader'macros)
+    (declare LispReader'macro)
 
     (defn LispReader'isMacro [c]
-        (some? (get LispReader'macros c))
+        (some? (LispReader'macro c))
     )
 
     (defn LispReader'isTerminatingMacro [c]
@@ -1129,7 +1147,7 @@
                     (and (some? delim) (= delim c))
                         delim!
                     'else
-                        (let [f'macro (get LispReader'macros c)]
+                        (let [f'macro (LispReader'macro c)]
                             (if (some? f'macro)
                                 (let [o (f'macro r scope c)]
                                     (if (identical? o r) (recur) o)
@@ -1192,12 +1210,12 @@
         (list 'quote (LispReader'read r, scope, nil, nil))
     )
 
-    (declare LispReader'dispatchMacros)
+    (declare LispReader'dispatchMacro)
 
     (defn dispatch-reader [r, scope, _delim]
         (let [c (LispReader'read1 r)]
             (if (some? c)
-                (let [f'macro (get LispReader'dispatchMacros c)]
+                (let [f'macro (LispReader'dispatchMacro c)]
                     (if (some? f'macro)
                         (f'macro r scope c)
                         (&do
@@ -1223,19 +1241,19 @@
         (&throw! "unmatched delimiter " delim)
     )
 
-    (def LispReader'macros
-        (cons-map
-            Unicode'quotation   string-reader
-            Unicode'apostrophe  quote-reader        Unicode'grave     quote-reader
-            Unicode'lparen      list-reader         Unicode'rparen    unmatched-delimiter-reader
-            Unicode'lbracket    vector-reader       Unicode'rbracket  unmatched-delimiter-reader
-            Unicode'hash        dispatch-reader
+    (defn LispReader'macro [c]
+        (cond
+            (= c Unicode'quotation)  string-reader
+            (= c Unicode'apostrophe) quote-reader       (= c Unicode'grave)    quote-reader
+            (= c Unicode'lparen)     list-reader        (= c Unicode'rparen)   unmatched-delimiter-reader
+            (= c Unicode'lbracket)   vector-reader      (= c Unicode'rbracket) unmatched-delimiter-reader
+            (= c Unicode'hash)       dispatch-reader
         )
     )
 
-    (def LispReader'dispatchMacros
-        (cons-map
-            Unicode'underscore  discard-reader
+    (defn LispReader'dispatchMacro [c]
+        (cond
+            (= c Unicode'underscore) discard-reader
         )
     )
 )
