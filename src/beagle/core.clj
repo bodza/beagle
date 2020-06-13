@@ -128,6 +128,8 @@
         )
     )
 
+    (defn eager! [s] (if (-/-fn? s) (-/-apply s nil) s))
+
     (declare Cons''first)
 
     (defn first [s]
@@ -259,7 +261,7 @@
 
 (defn reverse [s] (reduce conj nil s))
 
-(defn list [& s] s)
+(defn list [& s] (if (-/-seq? s) (reverse (reverse s)) s))
 
 (defn some [f s]
     (let [s (seq s)]
@@ -682,6 +684,7 @@
             (nil? x)       (append' a "nil")
             (true? x)      (append' a "true")
             (false? x)     (append' a "false")
+            (bits? x)      (append' a "bits")
             (symbol? x)    (append-sym a x)
             (string? x)    (append-str a x)
             (cons? x)      (append-seq a x)
@@ -746,9 +749,9 @@
 )
 
 (about #_"LiteralExpr"
-    (def LiteralExpr'NIL   (list '&literal nil))
-    (def LiteralExpr'TRUE  (list '&literal true))
-    (def LiteralExpr'FALSE (list '&literal false))
+    (def LiteralExpr'NIL   (list (symbol! '&literal) nil))
+    (def LiteralExpr'TRUE  (list (symbol! '&literal) true))
+    (def LiteralExpr'FALSE (list (symbol! '&literal) false))
 
     (defn LiteralExpr'parse [form, scope]
         (cond
@@ -760,7 +763,7 @@
                 (nil? x)    LiteralExpr'NIL
                 (true? x)   LiteralExpr'TRUE
                 (false? x)  LiteralExpr'FALSE
-                'else      (list '&literal x)
+                'else      (list (symbol! '&literal) x)
             )
         )
     )
@@ -779,7 +782,7 @@
             then (Compiler'analyze (third form), scope)
             else (Compiler'analyze (fourth form), scope)
         ]
-            (list '&if test then else)
+            (list (symbol! '&if) test then else)
         )
     )
 )
@@ -789,7 +792,7 @@
         (let [
             args (map (fn [%] (Compiler'analyze %, scope)) (next form))
         ]
-            (cons (first form) args)
+            (cons (first form) (eager! args))
         )
     )
 )
@@ -800,7 +803,7 @@
             fexpr (Compiler'analyze (first form), scope)
             args (map (fn [%] (Compiler'analyze %, scope)) (next form))
         ]
-            (list '&invoke fexpr args)
+            (list (symbol! '&invoke) fexpr (eager! args))
         )
     )
 )
@@ -848,9 +851,9 @@
                         (if (some? etal) (cons etal scope) scope)
                     )
                 )
-            body (EmbedExpr'parse (cons '&do (next form)), scope)
+            body (EmbedExpr'parse (cons (symbol! '&do) (next form)), scope)
         ]
-            (list '&fn self pars etal body)
+            (list (symbol! '&fn) self pars etal body)
         )
     )
 )
@@ -895,14 +898,14 @@
 
     (defn Compiler'macro [m]
         (cond
-            (= m 'about)    (fn [& s]   (cons '&do s))
+            (= m 'about)    (fn [& s]   (cons (symbol! '&do) s))
             (= m 'declare)  (fn [x]     (list 'def x nil))
-            (= m 'when)     (fn [? & s] (list 'if ? (cons '&do s) nil))
+            (= m 'when)     (fn [? & s] (list 'if ? (cons (symbol! '&do) s) nil))
             (= m 'cond)     (fn [& s]   (when s (list 'if (first s) (second s) (cons 'cond (next (next s))))))
             (= m 'and)      (fn [& s]   (if s (let [x (first s) s (next s)] (if s (list 'let (list '&and x) (list 'if '&and (cons 'and s) '&and)) x)) true))
             (= m 'or)       (fn [& s]   (when s (let [x (first s) s (next s)] (if s (list 'let (list '&or x) (list 'if '&or '&or (cons 'or s))) x))))
             (= m '->)       (fn [x & s] (loop [x x s s] (if s (recur (let [f (first s)] (if (or (cons? f) (-/-seq? f)) (cons (first f) (cons x (next f))) (list f x))) (next s)) x)))
-            (= m 'let)      (fn [a & s] (if (seq a) (list (list 'fn (list (first a)) (cons 'let (cons (next (next a)) s))) (second a)) (cons '&do s)))
+            (= m 'let)      (fn [a & s] (if (seq a) (list (list 'fn (list (first a)) (cons 'let (cons (next (next a)) s))) (second a)) (cons (symbol! '&do) s)))
             (= m 'loop)     (fn [a & s] (cons (cons 'fn (cons 'recur (cons (ConsMap''keys a) s))) (ConsMap''vals a)))
             (= m 'defn)     (fn [f & s] (list 'def f (cons 'fn s)))
             (= m 'lazy-seq) (fn [& s]   (cons 'fn (cons [] s)))
@@ -927,11 +930,11 @@
     (defn Compiler'analyzeSymbol [sym, scope]
         (or
             (when (and (not (Symbol''alt? sym)) (some (fn [%] (= % sym)) scope))
-                (list '&binding sym)
+                (list (symbol! '&binding) sym)
             )
             (let [v (Var'find sym)]
                 (when (some? v)
-                    (list '&var-get v)
+                    (list (symbol! '&var-get) v)
                 )
             )
             (&throw! "unable to resolve symbol " sym)
@@ -961,7 +964,7 @@
             (false? form)                                         LiteralExpr'FALSE
             (or (symbol? form) (-/-symbol? form))                (Compiler'analyzeSymbol (symbol! form), scope)
             (or (cons? form) (and (-/-seq? form) (-/-seq form))) (Compiler'analyzeSeq form, scope)
-            'else                                                (list '&literal form)
+            'else                                                (list (symbol! '&literal) form)
         )
     )
 
