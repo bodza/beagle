@@ -13,7 +13,7 @@
     )
 )
 
-(refer! clojure.core [-> = aget and apply aset char char? class cond conj cons declare defmacro defn first fn fn? identical? int let list loop neg? next not number? object-array or seq seq? seqable? some? str string? symbol symbol? the-ns time when])
+(refer! clojure.core [= aget and apply aset char char? class cond conj cons declare defmacro defn first fn fn? identical? int let list loop neg? next not number? object-array or seq seq? seqable? some? str string? symbol symbol? the-ns time when])
 
 (defn &throw! [& s] (throw (Error. (apply str s))))
 
@@ -43,39 +43,24 @@
 (def -string?    string?)
 (def -symbol?    symbol?)
 
-(def t'atom    (&bits   '0))
-(def t'cons    (&bits   '1))
-(def t'string  (&bits  '10))
-(def t'symbol  (&bits  '11))
-(def t'closure (&bits '100))
+(defn &car [s] (aget s 0))
+(defn &cdr [s] (aget s 1))
 
-(defn &car [s] (aget s 1))
-(defn &cdr [s] (aget s 2))
+(defn &volatile-cas-cdr! [a x y] (when (identical? (aget a 1) x) (aset a 1 y) a))
+(defn &volatile-get-cdr  [a]     (aget a 1))
+(defn &volatile-set-cdr! [a x]   (aset a 1 x) a)
 
-(defn &volatile-cas-car! [a x y] (when (identical? (aget a 1) x) (aset a 1 y) a))
-(defn &volatile-get-car  [a]     (aget a 1))
-(defn &volatile-set-car! [a x]   (aset a 1 x) a)
+(defn &cons  [car cdr] (let [a (object-array 2)] (aset a 0 car) (aset a 1 cdr) a))
+(defn &cons! [car cdr] (let [a (object-array 2)] (aset a 0 car) (&volatile-set-cdr! a cdr)))
 
-(defn &atom    [init]      (let [a (object-array 2)] (aset a 0 t'atom)    (&volatile-set-car! a init)))
-(defn &cons    [car cdr]   (let [a (object-array 3)] (aset a 0 t'cons)    (aset a 1 car)  (aset a 2 cdr)  a))
-(defn &string  [s]         (let [a (object-array 2)] (aset a 0 t'string)  (aset a 1 s)                    a))
-(defn &symbol  [name alt?] (let [a (object-array 3)] (aset a 0 t'symbol)  (aset a 1 name) (aset a 2 alt?) a))
-(defn &closure [fun env]   (let [a (object-array 3)] (aset a 0 t'closure) (aset a 1 fun)  (aset a 2 env)  a))
-
-(defn array? [x] (and (some? x) (.isArray (class x))))
-
-(defn &atom?    [x] (and (array? x) (= (aget x 0) t'atom)))
-(defn &cons?    [x] (and (array? x) (= (aget x 0) t'cons)))
-(defn &string?  [x] (and (array? x) (= (aget x 0) t'string)))
-(defn &symbol?  [x] (and (array? x) (= (aget x 0) t'symbol)))
-(defn &closure? [x] (and (array? x) (= (aget x 0) t'closure)))
+(defn &cons? [x] (and (some? x) (.isArray (class x))))
 
 (ns beagle.core
     (:refer-clojure :only [])
     (:require [beagle.bore :as -])
 )
 
-(-/refer! beagle.bore [-> and &append &atom &atom? &bits &bits? &bits= &car &cdr &closure &closure? cond cons &cons &cons? declare defn &flush fn &identical? let list loop or &read &string &string? &symbol &symbol? &throw! &unread &volatile-cas-car! &volatile-get-car &volatile-set-car! when])
+(-/refer! beagle.bore [and &append &bits &bits? &bits= &car &cdr cond cons &cons &cons! &cons? declare defn &flush fn &identical? let list loop or &read &throw! &unread &volatile-cas-cdr! &volatile-get-cdr &volatile-set-cdr! when])
 
 (defn -=        [_ _]                      (&throw! "-= non più"))
 (defn -apply    [_ _]                      (&throw! "-apply non più"))
@@ -109,19 +94,18 @@
 (defn some?  [x] (not (nil? x)))
 
 (about #_"seq"
-    (declare cons?)
-    (declare Cons''seq)
-    (declare string?)
-    (declare String''seq)
-    (declare closure?)
-    (declare Closure''seq)
+    (declare string?)  (declare String''seq)
+    (declare symbol?)  (declare Symbol''seq)
+    (declare closure?) (declare Closure''seq)
+    (declare cons?)    (declare Cons''seq)
 
     (defn seq [s]
         (cond
             (nil? s)         nil
-            (cons? s)       (Cons''seq s)
             (string? s)     (String''seq s)
+            (symbol? s)     (Symbol''seq s)
             (closure? s)    (Closure''seq s)
+            (cons? s)       (Cons''seq s)
             (-/-seqable? s) (-/-seq s)
             (-/-fn? s)      (-/-apply s nil)
             'else           (&throw! "seq not supported on " s)
@@ -169,26 +153,28 @@
 )
 
 (about #_"Atom"
-    (defn Atom'new [init] (&atom init))
+    (defn Atom'new [init] (&cons! '&atom init))
 
-    (defn atom? [x] (&atom? x))
+    (declare =)
+
+    (defn atom? [x] (and (&cons? x) (= (&car x) '&atom)))
 
     (defn Atom''deref [this]
-        (&volatile-get-car this)
+        (&volatile-get-cdr this)
     )
 
     (declare apply)
 
     (defn Atom''swap [this, f, s]
         (loop []
-            (let [o (&volatile-get-car this) o' (apply f o s)]
-                (if (&volatile-cas-car! this o o') o' (recur))
+            (let [o (&volatile-get-cdr this) o' (apply f o s)]
+                (if (&volatile-cas-cdr! this o o') o' (recur))
             )
         )
     )
 
     (defn Atom''reset [this, o']
-        (&volatile-set-car! this o')
+        (&volatile-set-cdr! this o')
         o'
     )
 )
@@ -219,19 +205,17 @@
 (about #_"Cons"
     (defn Cons'new [car, cdr] (&cons car cdr))
 
-    (defn cons? [x] (&cons? x))
-
-    (defn Cons''car [this] (when (cons? this) (&car this)))
-    (defn Cons''cdr [this] (when (cons? this) (&cdr this)))
-
-    (defn Cons''seq [this]
-        this
+    (defn cons? [x]
+        (and (&cons? x)
+            (let [t (&car x)]
+                (not (or (= t '&string) (= t '&symbol) (= t '&closure) (= t '&atom)))
+            )
+        )
     )
 
-    (defn Cons''first [this]      (Cons''car this))
-    (defn Cons''next  [this] (seq (Cons''cdr this)))
-
-    (declare =)
+    (defn Cons''seq   [this]            this)
+    (defn Cons''first [this]      (&car this))
+    (defn Cons''next  [this] (seq (&cdr this)))
 
     (defn Cons''equals [this, that]
         (or (identical? this that)
@@ -247,7 +231,7 @@
     )
 )
 
-(defn cons [x s] (Cons'new x, (#_seq identity s)))
+(defn cons [x s] (Cons'new x, s))
 
 (defn conj [s x] (cons x s))
 
@@ -363,62 +347,45 @@
 (defn update [m k f & s] (assoc m k (apply f (get m k) s)))
 
 (about #_"String"
-    (defn String'new [s] (&string s))
+    (defn String'new [s] (&cons '&string s))
 
-    (defn string? [x] (&string? x))
+    (defn string? [x] (and (&cons? x) (= (&car x) '&string)))
 
-    (defn String''s [this] (when (string? this) (&car this)))
-
-    (defn String''seq [this] (seq (String''s this)))
+    (defn String''seq [this] (seq (&cdr this)))
 
     (defn String''equals [this, that]
         (or (identical? this that)
-            (and (or (string? that) (-/-string? that))
-                (loop [s (seq this) z (seq that)]
-                    (if (some? s)
-                        (and (some? z) (= (first s) (first z)) (recur (next s) (next z)))
-                        (nil? z)
-                    )
-                )
+            (and (string? that)
+                (= (seq this) (seq that))
             )
         )
     )
 )
 
-(defn string [s] (cond (string? s) s (-/-string? s) (String'new s) 'else (String'new (apply -/-str s))))
+(defn string! [s] (if (-/-string? s) (String'new (reverse (reverse s))) s))
 
 (about #_"Symbol"
-    (defn Symbol'new [name, alt?] (&symbol name alt?))
+    (defn Symbol'new [s] (&cons '&symbol s))
 
-    (defn symbol? [x] (&symbol? x))
+    (defn symbol? [x] (and (&cons? x) (= (&car x) '&symbol)))
 
-    (defn Symbol''name [this] (when (symbol? this) (&car this)))
-    (defn Symbol''alt? [this] (when (symbol? this) (&cdr this)))
+    (defn Symbol''seq [this] (seq (&cdr this)))
 
     (declare Unicode'minus)
     (declare Unicode'slash)
 
-    (defn Symbol'create [s]
-        (let [
-            alt? (and (= (first s) Unicode'minus) (= (second s) Unicode'slash))
-        ]
-            (Symbol'new (string (if alt? (next (next s)) s)), alt?)
-        )
-    )
+    (defn Symbol''alt? [this] (and (= (first this) Unicode'minus) (= (second this) Unicode'slash)))
 
     (defn Symbol''equals [this, that]
         (or (identical? this that)
             (and (symbol? that)
-                (= (Symbol''alt? this) (Symbol''alt? that))
-                (= (Symbol''name this) (Symbol''name that))
+                (= (seq this) (seq that))
             )
         )
     )
 )
 
-(defn symbol! [s] (if (-/-symbol? s) (Symbol'create (-/-str s)) s))
-
-(defn symbol [s] (cond (symbol? s) s (-/-symbol? s) (Symbol'create (-/-str s)) 'else (Symbol'create s)))
+(defn symbol! [s] (if (-/-symbol? s) (Symbol'new (reverse (reverse (-/-str s)))) s))
 
 (about #_"unicode"
     (defn bits [s] (&bits s))
@@ -513,16 +480,16 @@
 )
 
 (about #_"Closure"
-    (defn Closure'new [fun, env] (&closure fun env))
+    (defn Closure'new [fun, env] (&cons '&closure (cons fun env)))
 
-    (defn closure? [x] (&closure? x))
+    (defn closure? [x] (and (&cons? x) (= (&car x) '&closure)))
 
-    (defn Closure''fun [this] (when (closure? this) (&car this)))
-    (defn Closure''env [this] (when (closure? this) (&cdr this)))
+    (defn Closure''fun [this] (first (&cdr this)))
+    (defn Closure''env [this] (next  (&cdr this)))
 
     (declare Machine'compute)
 
-    (defn Closure''applyTo [this, args]
+    (defn Closure''apply [this, args]
         (let [
             fun (Closure''fun this) env (Closure''env this)
             env
@@ -544,15 +511,15 @@
     )
 
     (defn Closure''seq [this]
-        (Closure''applyTo this, nil)
+        (Closure''apply this, nil)
     )
 )
 
 (defn apply [f & s]
     (let [s (spread s)]
         (cond
-            (closure? f) (Closure''applyTo f, s)
-            (atom? f)    (apply (deref f) s)
+            (closure? f) (Closure''apply f, s)
+            (atom? f)    (#_recur apply (deref f) s)
             (-/-fn? f)   (-/-apply f (reduce -/-conj (-/list) (reverse s)))
             'else        (&throw! "apply not supported on " f)
         )
@@ -569,7 +536,7 @@
     (defn Var'find [sym]
         (if (not (Symbol''alt? sym))
             (get (deref Beagle'ns) sym)
-            (-/-var-find (apply -/-str (Symbol''name sym)))
+            (-/-var-find (apply -/-str (next (next sym))))
         )
     )
 
@@ -601,12 +568,12 @@
         (identical? x y) true
         (or (nil? x) (nil? y) (true? x) (true? y) (false? x) (false? y)) false
         (or (bits? x) (bits? y)) (&bits= x y)
+        (string? x)      (String''equals x, (string! y))
+        (string? y)      (String''equals y, (string! x))
+        (or (-/-string? x) (-/-string? y)) (-/-= x y)
         (symbol? x)      (Symbol''equals x, (symbol! y))
         (symbol? y)      (Symbol''equals y, (symbol! x))
         (or (-/-symbol? x) (-/-symbol? y)) (-/-= x y)
-        (string? x)      (String''equals x, y)
-        (string? y)      (String''equals y, x)
-        (or (-/-string? x) (-/-string? y)) (-/-= x y)
         (cons? x)        (Cons''equals x, y)
         (cons? y)        (Cons''equals y, x)
         'else            (&throw! "= not supported on " x ", not even on " y)
@@ -615,14 +582,14 @@
 
 (about #_"append"
     (def Beagle'in  (atom nil))
-    (def Beagle'out nil)
+    (def Beagle'out       nil)
 
     (defn append' [a x]
         (let [f'append (if (some? a) conj (fn [%1 %2] (&append %1 %2)))]
             (cond
-                (bits? x)                       (f'append a x)
-                (or (string? x) (-/-string? x)) (reduce f'append a x)
-                'else                           (&throw! "append' not supported for " x)
+                (bits? x)                                   (f'append a x)
+                (or (string? x) (-/-string? x) (symbol? x)) (reduce f'append a x)
+                'else                                       (&throw! "append' not supported for " x)
             )
         )
     )
@@ -647,12 +614,7 @@
     )
 
     (defn append-sym [a x]
-        (let [
-            a (if (Symbol''alt? x) (append' a "-/") a)
-            a (append' a (Symbol''name x))
-        ]
-            a
-        )
+        (append' a x)
     )
 
     (defn append* [a b f'append c d q]
@@ -685,13 +647,13 @@
             (true? x)      (append' a "true")
             (false? x)     (append' a "false")
             (bits? x)      (append' a "bits")
-            (symbol? x)    (append-sym a x)
             (string? x)    (append-str a x)
-            (cons? x)      (append-seq a x)
+            (symbol? x)    (append-sym a x)
             (atom? x)      (append' a "atom")
             (closure? x)   (append' a "closure")
-            (-/-symbol? x) (append-sym a (symbol! x))
-            (-/-string? x) (append-str a x)
+            (cons? x)      (append-seq a x)
+            (-/-string? x) (append' a "-string")
+            (-/-symbol? x) (append' a "-symbol")
             (-/-seq? x)    (append' a "-seq")
             (-/-fn? x)     (append' a "-fn")
             'else          (&throw! "append not supported on " x)
@@ -866,7 +828,7 @@
         )
         (let [s (symbol! (second form))]
             (if (symbol? s)
-                (list '&var-set! (Var'lookup s) (Compiler'analyze (third form), scope))
+                (list (symbol! '&var-set!) (Var'lookup s) (Compiler'analyze (third form), scope))
                 (&throw! "first argument to def must be a symbol")
             )
         )
@@ -889,9 +851,9 @@
             (= e '&identical?)
             (= e '&read) (= e '&unread) (= e '&append) (= e '&flush)
             (= e '&car) (= e '&cdr)
-            (= e '&atom?) (= e '&cons?) (= e '&string?) (= e '&symbol?) (= e '&closure?)
-            (= e '&atom) (= e '&cons) (= e '&string) (= e '&symbol) (= e '&closure)
-            (= e '&volatile-cas-car!) (= e '&volatile-get-car) (= e '&volatile-set-car!)
+            (= e '&cons?)
+            (= e '&cons) (= e '&cons!)
+            (= e '&volatile-cas-cdr!) (= e '&volatile-get-cdr) (= e '&volatile-set-cdr!)
             (= e '&throw!)
         )
     )
@@ -904,7 +866,6 @@
             (= m 'cond)     (fn [& s]   (when s (list 'if (first s) (second s) (cons 'cond (next (next s))))))
             (= m 'and)      (fn [& s]   (if s (let [x (first s) s (next s)] (if s (list 'let (list '&and x) (list 'if '&and (cons 'and s) '&and)) x)) true))
             (= m 'or)       (fn [& s]   (when s (let [x (first s) s (next s)] (if s (list 'let (list '&or x) (list 'if '&or '&or (cons 'or s))) x))))
-            (= m '->)       (fn [x & s] (loop [x x s s] (if s (recur (let [f (first s)] (if (or (cons? f) (-/-seq? f)) (cons (first f) (cons x (next f))) (list f x))) (next s)) x)))
             (= m 'let)      (fn [a & s] (if (seq a) (list (list 'fn (list (first a)) (cons 'let (cons (next (next a)) s))) (second a)) (cons (symbol! '&do) s)))
             (= m 'loop)     (fn [a & s] (cons (cons 'fn (cons 'recur (cons (ConsMap''keys a) s))) (ConsMap''vals a)))
             (= m 'defn)     (fn [f & s] (list 'def f (cons 'fn s)))
@@ -970,7 +931,7 @@
 
     (defn Compiler'eval [form]
         (let [form (Compiler'macroexpand form)]
-            (apply (Closure'new (Compiler'analyze (list 'fn [] form), nil), nil) nil)
+            (Machine'compute (Compiler'analyze form, nil), nil)
         )
     )
 )
@@ -982,7 +943,7 @@
         (cond
             (= f '&do)         (last s)
 
-            (= f '&bits)       (-/&bits (apply -/-str (Symbol''name (first s))))
+            (= f '&bits)       (-/&bits (apply -/-str (first s)))
             (= f '&bits?)      (-/&bits? (first s))
             (= f '&bits=)      (-/&bits= (first s) (second s))
             (= f '&identical?) (-/&identical? (first s) (second s))
@@ -995,21 +956,14 @@
             (= f '&car)        (-/&car (first s))
             (= f '&cdr)        (-/&cdr (first s))
 
-            (= f '&atom?)      (-/&atom? (first s))
             (= f '&cons?)      (-/&cons? (first s))
-            (= f '&string?)    (-/&string? (first s))
-            (= f '&symbol?)    (-/&symbol? (first s))
-            (= f '&closure?)   (-/&closure? (first s))
 
-            (= f '&atom)       (-/&atom (first s))
             (= f '&cons)       (-/&cons (first s) (second s))
-            (= f '&string)     (-/&string (first s))
-            (= f '&symbol)     (-/&symbol (first s) (second s))
-            (= f '&closure)    (-/&closure (first s) (second s))
+            (= f '&cons!)      (-/&cons! (first s) (second s))
 
-            (= f '&volatile-cas-car!) (-/&volatile-cas-car! (first s) (second s) (third s))
-            (= f '&volatile-get-car)  (-/&volatile-get-car (first s))
-            (= f '&volatile-set-car!) (-/&volatile-set-car! (first s) (second s))
+            (= f '&volatile-cas-cdr!) (-/&volatile-cas-cdr! (first s) (second s) (third s))
+            (= f '&volatile-get-cdr)  (-/&volatile-get-cdr (first s))
+            (= f '&volatile-set-cdr!) (-/&volatile-set-cdr! (first s) (second s))
 
             (= f '&throw!)     (apply -/&throw! (map (fn [%] (apply -/-str %)) s))
             'else              (-/&throw! "&embed not supported on " f)
@@ -1136,7 +1090,7 @@
             (= s "nil")              nil
             (= s "true")             true
             (= s "false")            false
-            (LispReader'isSymbol s) (symbol s)
+            (LispReader'isSymbol s) (Symbol'new s)
             'else                   (&throw! "invalid token " s)
         )
     )
@@ -1266,7 +1220,7 @@
 (defn repl []
     (let [esc Unicode'escape] (print (str esc "[31mBeagle " esc "[32m=> " esc "[0m")))
     (flush)
-    (-> (read) (eval) (prn))
+    (prn (eval (read)))
     (#_recur repl)
 )
 
