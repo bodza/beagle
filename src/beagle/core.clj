@@ -152,12 +152,17 @@
     (defn reduce-kv [f r kvs] (let [kvs (seq kvs)] (if (some? kvs) (#_recur reduce-kv f (f r (first kvs) (second kvs)) (next (next kvs))) r)))
 )
 
+(def &'string  (&bits '1110000000000000))
+(def &'symbol  (&bits '1110000000000001))
+(def &'closure (&bits '1110000000000010))
+(def &'atom    (&bits '1110000000000011))
+
 (about #_"Atom"
-    (defn Atom'new [init] (&cons! '&atom init))
+    (defn Atom'new [init] (&cons! &'atom init))
 
     (declare =)
 
-    (defn atom? [x] (and (&cons? x) (= (&car x) '&atom)))
+    (defn atom? [x] (and (&cons? x) (= (&car x) &'atom)))
 
     (defn Atom''deref [this]
         (&volatile-get-cdr this)
@@ -208,7 +213,7 @@
     (defn cons? [x]
         (and (&cons? x)
             (let [t (&car x)]
-                (not (or (= t '&string) (= t '&symbol) (= t '&closure) (= t '&atom)))
+                (not (or (= t &'string) (= t &'symbol) (= t &'closure) (= t &'atom)))
             )
         )
     )
@@ -347,9 +352,9 @@
 (defn update [m k f & s] (assoc m k (apply f (get m k) s)))
 
 (about #_"String"
-    (defn String'new [s] (&cons '&string s))
+    (defn String'new [s] (&cons &'string s))
 
-    (defn string? [x] (and (&cons? x) (= (&car x) '&string)))
+    (defn string? [x] (and (&cons? x) (= (&car x) &'string)))
 
     (defn String''seq [this] (seq (&cdr this)))
 
@@ -365,9 +370,9 @@
 (defn string! [s] (if (-/-string? s) (String'new (reverse (reverse s))) s))
 
 (about #_"Symbol"
-    (defn Symbol'new [s] (&cons '&symbol s))
+    (defn Symbol'new [s] (&cons &'symbol s))
 
-    (defn symbol? [x] (and (&cons? x) (= (&car x) '&symbol)))
+    (defn symbol? [x] (and (&cons? x) (= (&car x) &'symbol)))
 
     (defn Symbol''seq [this] (seq (&cdr this)))
 
@@ -480,9 +485,9 @@
 )
 
 (about #_"Closure"
-    (defn Closure'new [fun, env] (&cons '&closure (cons fun env)))
+    (defn Closure'new [fun, env] (&cons &'closure (cons fun env)))
 
-    (defn closure? [x] (and (&cons? x) (= (&car x) '&closure)))
+    (defn closure? [x] (and (&cons? x) (= (&car x) &'closure)))
 
     (defn Closure''fun [this] (first (&cdr this)))
     (defn Closure''env [this] (next  (&cdr this)))
@@ -715,19 +720,21 @@
     (def LiteralExpr'TRUE  (list (symbol! '&literal) true))
     (def LiteralExpr'FALSE (list (symbol! '&literal) false))
 
+    (defn LiteralExpr'create [form]
+        (cond
+            (nil? form)    LiteralExpr'NIL
+            (true? form)   LiteralExpr'TRUE
+            (false? form)  LiteralExpr'FALSE
+            'else         (list (symbol! '&literal) form)
+        )
+    )
+
     (defn LiteralExpr'parse [form, scope]
         (cond
             (nil? (next form))         (&throw! "too few arguments to quote")
             (some? (next (next form))) (&throw! "too many arguments to quote")
         )
-        (let [x (second form)]
-            (cond
-                (nil? x)    LiteralExpr'NIL
-                (true? x)   LiteralExpr'TRUE
-                (false? x)  LiteralExpr'FALSE
-                'else      (list (symbol! '&literal) x)
-            )
-        )
+        (LiteralExpr'create (second form))
     )
 )
 
@@ -765,7 +772,7 @@
             fexpr (Compiler'analyze (first form), scope)
             args (map (fn [%] (Compiler'analyze %, scope)) (next form))
         ]
-            (list (symbol! '&invoke) fexpr (eager! args))
+            (list (symbol! '&apply) fexpr (eager! args))
         )
     )
 )
@@ -836,6 +843,21 @@
 )
 
 (about #_"Compiler"
+    (defn Compiler'macro [m]
+        (cond
+            (= m 'about)    (fn [& s]   (cons (symbol! '&do) s))
+            (= m 'declare)  (fn [x]     (list 'def x nil))
+            (= m 'when)     (fn [? & s] (list 'if ? (cons (symbol! '&do) s) nil))
+            (= m 'cond)     (fn [& s]   (when s (list 'if (first s) (second s) (cons 'cond (next (next s))))))
+            (= m 'and)      (fn [& s]   (if s (let [x (first s) s (next s)] (if s (list 'let (list '&and x) (list 'if '&and (cons 'and s) '&and)) x)) true))
+            (= m 'or)       (fn [& s]   (when s (let [x (first s) s (next s)] (if s (list 'let (list '&or x) (list 'if '&or '&or (cons 'or s))) x))))
+            (= m 'let)      (fn [a & s] (if (seq a) (list (list 'fn (list (first a)) (cons 'let (cons (next (next a)) s))) (second a)) (cons (symbol! '&do) s)))
+            (= m 'loop)     (fn [a & s] (cons (cons 'fn (cons 'recur (cons (ConsMap''keys a) s))) (ConsMap''vals a)))
+            (= m 'defn)     (fn [f & s] (list 'def f (cons 'fn s)))
+            (= m 'lazy-seq) (fn [& s]   (cons 'fn (cons [] s)))
+        )
+    )
+
     (defn Compiler'special [s]
         (cond
             (= s 'def)   DefExpr'parse
@@ -858,85 +880,42 @@
         )
     )
 
-    (defn Compiler'macro [m]
-        (cond
-            (= m 'about)    (fn [& s]   (cons (symbol! '&do) s))
-            (= m 'declare)  (fn [x]     (list 'def x nil))
-            (= m 'when)     (fn [? & s] (list 'if ? (cons (symbol! '&do) s) nil))
-            (= m 'cond)     (fn [& s]   (when s (list 'if (first s) (second s) (cons 'cond (next (next s))))))
-            (= m 'and)      (fn [& s]   (if s (let [x (first s) s (next s)] (if s (list 'let (list '&and x) (list 'if '&and (cons 'and s) '&and)) x)) true))
-            (= m 'or)       (fn [& s]   (when s (let [x (first s) s (next s)] (if s (list 'let (list '&or x) (list 'if '&or '&or (cons 'or s))) x))))
-            (= m 'let)      (fn [a & s] (if (seq a) (list (list 'fn (list (first a)) (cons 'let (cons (next (next a)) s))) (second a)) (cons (symbol! '&do) s)))
-            (= m 'loop)     (fn [a & s] (cons (cons 'fn (cons 'recur (cons (ConsMap''keys a) s))) (ConsMap''vals a)))
-            (= m 'defn)     (fn [f & s] (list 'def f (cons 'fn s)))
-            (= m 'lazy-seq) (fn [& s]   (cons 'fn (cons [] s)))
-        )
-    )
-
-    (defn Compiler'macroexpand1 [form]
-        (if (or (cons? form) (-/-seq? form))
-            (let [f'macro (Compiler'macro (first form))]
-                (if (some? f'macro) (apply f'macro (next form)) form)
-            )
-            form
-        )
-    )
-
-    (defn Compiler'macroexpand [form]
-        (let [me (Compiler'macroexpand1 form)]
-            (if (#_= identical? me form) form (#_recur Compiler'macroexpand me))
-        )
-    )
-
-    (defn Compiler'analyzeSymbol [sym, scope]
-        (or
-            (when (and (not (Symbol''alt? sym)) (some (fn [%] (= % sym)) scope))
-                (list (symbol! '&binding) sym)
-            )
-            (let [v (Var'find sym)]
-                (when (some? v)
-                    (list (symbol! '&var-get) v)
-                )
-            )
-            (&throw! "unable to resolve symbol " sym)
-        )
-    )
-
-    (defn Compiler'analyzeSeq [form, scope]
-        (let [me (Compiler'macroexpand1 form)]
-            (if (#_= identical? me form)
-                (let [op (first form)]
-                    (if (some? op)
-                        (let [f'parse (or (Compiler'special op) (if (Compiler'embed? op) EmbedExpr'parse InvokeExpr'parse))]
-                            (f'parse form scope)
-                        )
-                        (&throw! "can't call nil in form " form)
-                    )
-                )
-                (Compiler'analyze me, scope)
-            )
-        )
-    )
-
     (defn Compiler'analyze [form, scope]
         (cond
-            (nil? form)                                           LiteralExpr'NIL
-            (true? form)                                          LiteralExpr'TRUE
-            (false? form)                                         LiteralExpr'FALSE
-            (or (symbol? form) (-/-symbol? form))                (Compiler'analyzeSymbol (symbol! form), scope)
-            (or (cons? form) (and (-/-seq? form) (-/-seq form))) (Compiler'analyzeSeq form, scope)
-            'else                                                (list (symbol! '&literal) form)
-        )
-    )
-
-    (defn Compiler'eval [form]
-        (let [form (Compiler'macroexpand form)]
-            (Machine'compute (Compiler'analyze form, nil), nil)
+            (or (cons? form) (and (-/-seq? form) (-/-seq form)))
+                (let [
+                    f'macro (Compiler'macro (first form))
+                    me (if (some? f'macro) (apply f'macro (next form)) form)
+                ]
+                    (if (#_= identical? me form)
+                        (let [
+                            f'parse (or (Compiler'special (first form)) (if (Compiler'embed? (first form)) EmbedExpr'parse InvokeExpr'parse))
+                        ]
+                            (f'parse form scope)
+                        )
+                        (#_recur Compiler'analyze me, scope)
+                    )
+                )
+            (or (symbol? form) (-/-symbol? form))
+                (let [form (symbol! form)]
+                    (or
+                        (when (some (fn [%] (= % form)) scope)
+                            (list (symbol! '&binding) form)
+                        )
+                        (let [v (Var'find form)]
+                            (when (some? v)
+                                (list (symbol! '&var-get) v)
+                            )
+                        )
+                        (&throw! "unable to resolve symbol " form)
+                    )
+                )
+            'else (LiteralExpr'create form)
         )
     )
 )
 
-(defn eval [form] (Compiler'eval form))
+(defn eval [form] (Machine'compute (Compiler'analyze form, nil), nil))
 
 (about #_"machine"
     (defn &embed [f s]
@@ -976,7 +955,7 @@
                 (= f '&literal)  (second form)
                 (= f '&binding)  (get env (second form))
                 (= f '&if)       (f'compute (if (f'compute (second form)) (third form) (fourth form)))
-                (= f '&invoke)   (apply (f'compute (second form)) (map f'compute (third form)))
+                (= f '&apply)    (apply (f'compute (second form)) (map f'compute (third form)))
                 (= f '&fn)       (Closure'new form, env)
                 (= f '&var-get)  (Var''get (second form))
                 (= f '&var-set!) (Var''set (second form), (f'compute (third form)))
@@ -986,18 +965,18 @@
     )
 )
 
-(about #_"LispReader"
-    (declare LispReader'macro)
+(about #_"Reader"
+    (declare Reader'macro)
 
-    (defn LispReader'isMacro [c]
-        (some? (LispReader'macro c))
+    (defn Reader'isMacro [c]
+        (some? (Reader'macro c))
     )
 
-    (defn LispReader'isTerminatingMacro [c]
-        (and (LispReader'isMacro c) (not (= c Unicode'hash)) (not (= c Unicode'apostrophe)))
+    (defn Reader'isTerminatingMacro [c]
+        (and (Reader'isMacro c) (not (= c Unicode'hash)) (not (= c Unicode'apostrophe)))
     )
 
-    (defn LispReader'isLetter [c]
+    (defn Reader'isLetter [c]
         (or
             (= c Unicode'a) (= c Unicode'A)
             (= c Unicode'b) (= c Unicode'B)
@@ -1028,33 +1007,33 @@
         )
     )
 
-    (defn LispReader'isDigit [c]
+    (defn Reader'isDigit [c]
         (or (= c Unicode'0) (= c Unicode'1) (= c Unicode'2) (= c Unicode'3) (= c Unicode'4) (= c Unicode'5) (= c Unicode'6) (= c Unicode'7) (= c Unicode'8) (= c Unicode'9))
     )
 
-    (def LispReader'naught (bits '11111))
+    (def Reader'naught (bits '11111))
 
-    (defn LispReader'isWhitespace [c]
-        (or (= c Unicode'space) (= c Unicode'comma) (= c Unicode'newline) (= c LispReader'naught))
+    (defn Reader'isWhitespace [c]
+        (or (= c Unicode'space) (= c Unicode'comma) (= c Unicode'newline) (= c Reader'naught))
     )
 
-    (defn LispReader'read1 [r]
+    (defn Reader'read1 [r]
         (&read r)
     )
 
-    (defn LispReader'unread [r, c]
+    (defn Reader'unread [r, c]
         (when (some? c)
             (&unread r c)
         )
         nil
     )
 
-    (defn LispReader'readToken [r, c]
+    (defn Reader'readToken [r, c]
         (loop [s (cons c nil)]
-            (let [c (LispReader'read1 r)]
-                (if (or (nil? c) (LispReader'isWhitespace c) (LispReader'isTerminatingMacro c))
+            (let [c (Reader'read1 r)]
+                (if (or (nil? c) (Reader'isWhitespace c) (Reader'isTerminatingMacro c))
                     (&do
-                        (LispReader'unread r, c)
+                        (Reader'unread r, c)
                         (String'new (reverse s))
                     )
                     (recur (cons c s))
@@ -1065,17 +1044,17 @@
 
     #_"\n !\"#%&'()*,-./0123456789=>?ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]_abcdefghijklmnopqrstuvwxyz"
 
-    (defn LispReader'isSymbol [s]
+    (defn Reader'isSymbol [s]
         (let [s (if (and (= (first s) Unicode'minus) (= (second s) Unicode'slash)) (next (next s)) s)]
             (and
                 (let [c (first s)]
-                    (or (= c Unicode'minus) (LispReader'isLetter c) (= c Unicode'underscore) (LispReader'isDigit c) (= c Unicode'question) (= c Unicode'exclamation) (= c Unicode'equals) (= c Unicode'ampersand) (= c Unicode'percent))
+                    (or (= c Unicode'minus) (Reader'isLetter c) (= c Unicode'underscore) (Reader'isDigit c) (= c Unicode'question) (= c Unicode'exclamation) (= c Unicode'equals) (= c Unicode'ampersand) (= c Unicode'percent))
                 )
                 (loop [s (next s)]
                     (or (nil? s)
                         (and
                             (let [c (first s)]
-                                (or (= c Unicode'minus) (LispReader'isLetter c) (= c Unicode'underscore) (LispReader'isDigit c) (= c Unicode'apostrophe) (= c Unicode'asterisk) (= c Unicode'question) (= c Unicode'exclamation) (= c Unicode'equals) (= c Unicode'greater))
+                                (or (= c Unicode'minus) (Reader'isLetter c) (= c Unicode'underscore) (Reader'isDigit c) (= c Unicode'apostrophe) (= c Unicode'asterisk) (= c Unicode'question) (= c Unicode'exclamation) (= c Unicode'equals) (= c Unicode'greater))
                             )
                             (recur (next s))
                         )
@@ -1085,31 +1064,31 @@
         )
     )
 
-    (defn LispReader'interpretToken [s]
+    (defn Reader'interpretToken [s]
         (cond
-            (= s "nil")              nil
-            (= s "true")             true
-            (= s "false")            false
-            (LispReader'isSymbol s) (Symbol'new s)
-            'else                   (&throw! "invalid token " s)
+            (= s "nil")          nil
+            (= s "true")         true
+            (= s "false")        false
+            (Reader'isSymbol s) (Symbol'new s)
+            'else               (&throw! "invalid token " s)
         )
     )
 
-    (defn LispReader'read [r, scope, delim, delim!]
+    (defn Reader'read [r, scope, delim, delim!]
         (loop []
-            (let [c (loop [c (LispReader'read1 r)] (if (and (some? c) (LispReader'isWhitespace c)) (recur (LispReader'read1 r)) c))]
+            (let [c (loop [c (Reader'read1 r)] (if (and (some? c) (Reader'isWhitespace c)) (recur (Reader'read1 r)) c))]
                 (cond
                     (nil? c)
                         (&throw! "EOF while reading")
                     (and (some? delim) (= delim c))
                         delim!
                     'else
-                        (let [f'macro (LispReader'macro c)]
+                        (let [f'macro (Reader'macro c)]
                             (if (some? f'macro)
                                 (let [o (f'macro r scope c)]
                                     (if (identical? o r) (recur) o)
                                 )
-                                (LispReader'interpretToken (LispReader'readToken r, c))
+                                (Reader'interpretToken (Reader'readToken r, c))
                             )
                         )
                 )
@@ -1117,12 +1096,12 @@
         )
     )
 
-    (def LispReader'READ_FINISHED (atom nil))
+    (def Reader'READ_FINISHED (atom nil))
 
-    (defn LispReader'readDelimitedForms [r, scope, delim]
+    (defn Reader'readDelimitedForms [r, scope, delim]
         (loop [z nil]
-            (let [form (LispReader'read r, scope, delim, LispReader'READ_FINISHED)]
-                (if (identical? form LispReader'READ_FINISHED)
+            (let [form (Reader'read r, scope, delim, Reader'READ_FINISHED)]
+                (if (identical? form Reader'READ_FINISHED)
                     (reverse z)
                     (recur (cons form z))
                 )
@@ -1131,7 +1110,7 @@
     )
 
     (defn StringReader'escape [r]
-        (let [c (LispReader'read1 r)]
+        (let [c (Reader'read1 r)]
             (if (some? c)
                 (cond
                     (= c Unicode'n)         Unicode'newline
@@ -1146,7 +1125,7 @@
 
     (defn string-reader [r, scope, _delim]
         (loop [s nil]
-            (let [c (LispReader'read1 r)]
+            (let [c (Reader'read1 r)]
                 (if (some? c)
                     (if (= c Unicode'quotation)
                         (String'new (reverse s))
@@ -1159,24 +1138,24 @@
     )
 
     (defn discard-reader [r, scope, _delim]
-        (LispReader'read r, scope, nil, nil)
+        (Reader'read r, scope, nil, nil)
         r
     )
 
     (defn quote-reader [r, scope, _delim]
-        (list 'quote (LispReader'read r, scope, nil, nil))
+        (list 'quote (Reader'read r, scope, nil, nil))
     )
 
-    (declare LispReader'dispatchMacro)
+    (declare Reader'dispatchMacro)
 
     (defn dispatch-reader [r, scope, _delim]
-        (let [c (LispReader'read1 r)]
+        (let [c (Reader'read1 r)]
             (if (some? c)
-                (let [f'macro (LispReader'dispatchMacro c)]
+                (let [f'macro (Reader'dispatchMacro c)]
                     (if (some? f'macro)
                         (f'macro r scope c)
                         (&do
-                            (LispReader'unread r, c)
+                            (Reader'unread r, c)
                             (&throw! "no dispatch macro for " c)
                         )
                     )
@@ -1187,18 +1166,18 @@
     )
 
     (defn list-reader [r, scope, _delim]
-        (LispReader'readDelimitedForms r, scope, Unicode'rparen)
+        (Reader'readDelimitedForms r, scope, Unicode'rparen)
     )
 
     (defn vector-reader [r, scope, _delim]
-        (LispReader'readDelimitedForms r, scope, Unicode'rbracket)
+        (Reader'readDelimitedForms r, scope, Unicode'rbracket)
     )
 
     (defn unmatched-delimiter-reader [_r, scope, delim]
         (&throw! "unmatched delimiter " delim)
     )
 
-    (defn LispReader'macro [c]
+    (defn Reader'macro [c]
         (cond
             (= c Unicode'quotation)  string-reader
             (= c Unicode'apostrophe) quote-reader       (= c Unicode'grave)    quote-reader
@@ -1208,14 +1187,14 @@
         )
     )
 
-    (defn LispReader'dispatchMacro [c]
+    (defn Reader'dispatchMacro [c]
         (cond
             (= c Unicode'underscore) discard-reader
         )
     )
 )
 
-(defn read [] (LispReader'read Beagle'in, nil, nil, nil))
+(defn read [] (Reader'read Beagle'in, nil, nil, nil))
 
 (defn repl []
     (let [esc Unicode'escape] (print (str esc "[31mBeagle " esc "[32m=> " esc "[0m")))
