@@ -13,7 +13,7 @@
     )
 )
 
-(refer! clojure.core [= aget and apply aset char char? class cond conj cons declare defmacro defn first fn fn? identical? int let list loop neg? next not number? object-array or seq seq? seqable? some? str string? symbol symbol? the-ns time when])
+(refer! clojure.core [= aget and apply aset char char? class cond conj cons declare defmacro defn first fn fn? identical? int let list loop neg? next not number? object-array or seq seq? seqable? sequential? some? str string? symbol symbol? the-ns time when])
 
 (defn &throw! [& s] (throw (Error. (apply str s))))
 
@@ -29,19 +29,20 @@
 (defn -var-find [s] (.findInternedVar (the-ns 'beagle.core), (symbol s)))
 (defn -var-get  [v] (.get v))
 
-(def -=          =)
-(def -apply      apply)
-(def -conj       conj)
-(def -first      first)
-(def -fn?        fn?)
-(def &identical? identical?)
-(def -next       next)
-(def -seq        seq)
-(def -seq?       seq?)
-(def -seqable?   seqable?)
-(def -str        str)
-(def -string?    string?)
-(def -symbol?    symbol?)
+(def -=           =)
+(def -apply       apply)
+(def -conj        conj)
+(def -first       first)
+(def -fn?         fn?)
+(def &identical?  identical?)
+(def -next        next)
+(def -seq         seq)
+(def -seq?        seq?)
+(def -seqable?    seqable?)
+(def -sequential? sequential?)
+(def -str         str)
+(def -string?     string?)
+(def -symbol?     symbol?)
 
 (defn &car [s] (aget s 0))
 (defn &cdr [s] (aget s 1))
@@ -62,20 +63,21 @@
 
 (-/refer! beagle.bore [and &append &bits &bits? &bits= &car &cdr cond cons &cons &cons! &cons? declare defn &flush fn &identical? let list loop or &read &throw! &unread &volatile-cas-cdr! &volatile-get-cdr &volatile-set-cdr! when])
 
-(defn -=        [_ _]                      (&throw! "-= non più"))
-(defn -apply    [_ _]                      (&throw! "-apply non più"))
-(defn -conj     [_ _]                      (&throw! "-conj non più"))
-(defn -first    [_]                        (&throw! "-first non più"))
-(defn -fn?      [x]   (and (-/-fn? x)      (&throw! "-fn? non più")))
-(defn -next     [_]                        (&throw! "-next non più"))
-(defn -seq      [_]                        (&throw! "-seq non più"))
-(defn -seq?     [x]   (and (-/-seq? x)     (&throw! "-seq? non più")))
-(defn -seqable? [x]   (and (-/-seqable? x) (&throw! "-seqable? non più")))
-(defn -str      [& _]                      (&throw! "-str non più"))
-(defn -string?  [x]   (and (-/-string? x)  (&throw! "-string? non più")))
-(defn -symbol?  [x]   (and (-/-symbol? x)  (&throw! "-symbol? non più")))
-(defn -var-find [_]                        (&throw! "-var-find non più"))
-(defn -var-get  [_]                        (&throw! "-var-get non più"))
+(defn -=           [_ _]                         (&throw! "-= non più"))
+(defn -apply       [_ _]                         (&throw! "-apply non più"))
+(defn -conj        [_ _]                         (&throw! "-conj non più"))
+(defn -first       [_]                           (&throw! "-first non più"))
+(defn -fn?         [x]   (and (-/-fn? x)         (&throw! "-fn? non più")))
+(defn -next        [_]                           (&throw! "-next non più"))
+(defn -seq         [_]                           (&throw! "-seq non più"))
+(defn -seq?        [x]   (and (-/-seq? x)        (&throw! "-seq? non più")))
+(defn -seqable?    [x]   (and (-/-seqable? x)    (&throw! "-seqable? non più")))
+(defn -sequential? [x]   (and (-/-sequential? x) (&throw! "-sequential? non più")))
+(defn -str         [& _]                         (&throw! "-str non più"))
+(defn -string?     [x]   (and (-/-string? x)     (&throw! "-string? non più")))
+(defn -symbol?     [x]   (and (-/-symbol? x)     (&throw! "-symbol? non più")))
+(defn -var-find    [_]                           (&throw! "-var-find non più"))
+(defn -var-get     [_]                           (&throw! "-var-get non più"))
 
 (-/defmacro about    [& s] (-/cons 'do s))
 (-/defmacro lazy-seq [& s] (-/cons 'fn (-/cons [] s)))
@@ -97,6 +99,7 @@
     (declare string?)  (declare String''seq)
     (declare symbol?)  (declare Symbol''seq)
     (declare closure?) (declare Closure''seq)
+    (declare list?)    (declare List''seq)
     (declare cons?)    (declare Cons''seq)
 
     (defn seq [s]
@@ -105,6 +108,7 @@
             (string? s)     (String''seq s)
             (symbol? s)     (Symbol''seq s)
             (closure? s)    (Closure''seq s)
+            (list? s)       (List''seq s)
             (cons? s)       (Cons''seq s)
             (-/-seqable? s) (-/-seq s)
             (-/-fn? s)      (-/-apply s nil)
@@ -152,10 +156,11 @@
     (defn reduce-kv [f r kvs] (let [kvs (seq kvs)] (if (some? kvs) (#_recur reduce-kv f (f r (first kvs) (second kvs)) (next (next kvs))) r)))
 )
 
-(def &'string  (&bits '1110000000000000))
-(def &'symbol  (&bits '1110000000000001))
-(def &'closure (&bits '1110000000000010))
-(def &'atom    (&bits '1110000000000011))
+(def &'list    (&bits '1110000000000000))
+(def &'string  (&bits '1110000000000001))
+(def &'symbol  (&bits '1110000000000010))
+(def &'closure (&bits '1110000000000011))
+(def &'atom    (&bits '1110000000000100))
 
 (about #_"Atom"
     (defn Atom'new [init] (&cons! &'atom init))
@@ -213,7 +218,7 @@
     (defn cons? [x]
         (and (&cons? x)
             (let [t (&car x)]
-                (not (or (= t &'string) (= t &'symbol) (= t &'closure) (= t &'atom)))
+                (not (or (= t &'list) (= t &'string) (= t &'symbol) (= t &'closure) (= t &'atom)))
             )
         )
     )
@@ -224,13 +229,29 @@
 
     (defn Cons''equals [this, that]
         (or (identical? this that)
-            (and (or (cons? that) (-/-seqable? that))
+            (and (or (list? that) (cons? that) (-/-sequential? that))
                 (loop [s (seq this) z (seq that)]
                     (if (some? s)
                         (and (some? z) (= (first s) (first z)) (recur (next s) (next z)))
                         (nil? z)
                     )
                 )
+            )
+        )
+    )
+)
+
+(about #_"List"
+    (defn List'new [s] (&cons &'list s))
+
+    (defn list? [x] (and (&cons? x) (= (&car x) &'list)))
+
+    (defn List''seq [this] (seq (&cdr this)))
+
+    (defn List''equals [this, that]
+        (or (identical? this that)
+            (and (or (list? that) (cons? that) (-/-sequential? that))
+                (= (seq this) (seq that))
             )
         )
     )
@@ -579,6 +600,8 @@
         (symbol? x)      (Symbol''equals x, (symbol! y))
         (symbol? y)      (Symbol''equals y, (symbol! x))
         (or (-/-symbol? x) (-/-symbol? y)) (-/-= x y)
+        (list? x)        (List''equals x, y)
+        (list? y)        (List''equals y, x)
         (cons? x)        (Cons''equals x, y)
         (cons? y)        (Cons''equals y, x)
         'else            (&throw! "= not supported on " x ", not even on " y)
@@ -587,10 +610,10 @@
 
 (about #_"append"
     (def Beagle'in  (atom nil))
-    (def Beagle'out       nil)
+    (def Beagle'out (atom nil))
 
     (defn append' [a x]
-        (let [f'append (if (some? a) conj (fn [%1 %2] (&append %1 %2)))]
+        (let [f'append (if (atom? a) (fn [%1 %2] (&append %1 %2)) conj)]
             (cond
                 (bits? x)                                   (f'append a x)
                 (or (string? x) (-/-string? x) (symbol? x)) (reduce f'append a x)
@@ -656,7 +679,7 @@
             (symbol? x)    (append-sym a x)
             (atom? x)      (append' a "atom")
             (closure? x)   (append' a "closure")
-            (cons? x)      (append-seq a x)
+            (or (list? x) (cons? x)) (append-seq a x)
             (-/-string? x) (append' a "-string")
             (-/-symbol? x) (append' a "-symbol")
             (-/-seq? x)    (append' a "-seq")
@@ -673,7 +696,7 @@
         (loop [sb nil s s]
             (if (some? s)
                 (let [x (first s)]
-                    (recur (if (some? x) (append! sb x) sb) (next s))
+                    (recur (append! sb x) (next s))
                 )
                 (String'new (reverse sb))
             )
@@ -882,7 +905,7 @@
 
     (defn Compiler'analyze [form, scope]
         (cond
-            (or (cons? form) (and (-/-seq? form) (-/-seq form)))
+            (or (and (list? form) (seq form)) (cons? form) (and (-/-seq? form) (-/-seq form)))
                 (let [
                     f'macro (Compiler'macro (first form))
                     me (if (some? f'macro) (apply f'macro (next form)) form)
@@ -1029,14 +1052,14 @@
     )
 
     (defn Reader'readToken [r, c]
-        (loop [s (cons c nil)]
+        (loop [z (cons c nil)]
             (let [c (Reader'read1 r)]
                 (if (or (nil? c) (Reader'isWhitespace c) (Reader'isTerminatingMacro c))
                     (&do
                         (Reader'unread r, c)
-                        (String'new (reverse s))
+                        (String'new (reverse z))
                     )
-                    (recur (cons c s))
+                    (recur (cons c z))
                 )
             )
         )
@@ -1064,17 +1087,7 @@
         )
     )
 
-    (defn Reader'interpretToken [s]
-        (cond
-            (= s "nil")          nil
-            (= s "true")         true
-            (= s "false")        false
-            (Reader'isSymbol s) (Symbol'new s)
-            'else               (&throw! "invalid token " s)
-        )
-    )
-
-    (defn Reader'read [r, scope, delim, delim!]
+    (defn Reader'read [r, delim, delim!]
         (loop []
             (let [c (loop [c (Reader'read1 r)] (if (and (some? c) (Reader'isWhitespace c)) (recur (Reader'read1 r)) c))]
                 (cond
@@ -1085,10 +1098,18 @@
                     'else
                         (let [f'macro (Reader'macro c)]
                             (if (some? f'macro)
-                                (let [o (f'macro r scope c)]
+                                (let [o (f'macro r c)]
                                     (if (identical? o r) (recur) o)
                                 )
-                                (Reader'interpretToken (Reader'readToken r, c))
+                                (let [s (Reader'readToken r, c)]
+                                    (cond
+                                        (= s "nil")          nil
+                                        (= s "true")         true
+                                        (= s "false")        false
+                                        (Reader'isSymbol s) (Symbol'new s)
+                                        'else               (&throw! "invalid token " s)
+                                    )
+                                )
                             )
                         )
                 )
@@ -1098,9 +1119,9 @@
 
     (def Reader'READ_FINISHED (atom nil))
 
-    (defn Reader'readDelimitedForms [r, scope, delim]
+    (defn Reader'readDelimitedForms [r, delim]
         (loop [z nil]
-            (let [form (Reader'read r, scope, delim, Reader'READ_FINISHED)]
+            (let [form (Reader'read r, delim, Reader'READ_FINISHED)]
                 (if (identical? form Reader'READ_FINISHED)
                     (reverse z)
                     (recur (cons form z))
@@ -1123,13 +1144,13 @@
         )
     )
 
-    (defn string-reader [r, scope, _delim]
-        (loop [s nil]
+    (defn string-reader [r, _delim]
+        (loop [z nil]
             (let [c (Reader'read1 r)]
                 (if (some? c)
                     (if (= c Unicode'quotation)
-                        (String'new (reverse s))
-                        (recur (cons (if (= c Unicode'backslash) (StringReader'escape r) c) s))
+                        (String'new (reverse z))
+                        (recur (cons (if (= c Unicode'backslash) (StringReader'escape r) c) z))
                     )
                     (&throw! "EOF while reading string")
                 )
@@ -1137,23 +1158,23 @@
         )
     )
 
-    (defn discard-reader [r, scope, _delim]
-        (Reader'read r, scope, nil, nil)
+    (defn discard-reader [r, _delim]
+        (Reader'read r, nil, nil)
         r
     )
 
-    (defn quote-reader [r, scope, _delim]
-        (list 'quote (Reader'read r, scope, nil, nil))
+    (defn quote-reader [r, _delim]
+        (list 'quote (Reader'read r, nil, nil))
     )
 
     (declare Reader'dispatchMacro)
 
-    (defn dispatch-reader [r, scope, _delim]
+    (defn dispatch-reader [r, _delim]
         (let [c (Reader'read1 r)]
             (if (some? c)
                 (let [f'macro (Reader'dispatchMacro c)]
                     (if (some? f'macro)
-                        (f'macro r scope c)
+                        (f'macro r c)
                         (&do
                             (Reader'unread r, c)
                             (&throw! "no dispatch macro for " c)
@@ -1165,15 +1186,15 @@
         )
     )
 
-    (defn list-reader [r, scope, _delim]
-        (Reader'readDelimitedForms r, scope, Unicode'rparen)
+    (defn list-reader [r, _delim]
+        (List'new (Reader'readDelimitedForms r, Unicode'rparen))
     )
 
-    (defn vector-reader [r, scope, _delim]
-        (Reader'readDelimitedForms r, scope, Unicode'rbracket)
+    (defn vector-reader [r, _delim]
+        (List'new (Reader'readDelimitedForms r, Unicode'rbracket))
     )
 
-    (defn unmatched-delimiter-reader [_r, scope, delim]
+    (defn unmatched-delimiter-reader [_r, delim]
         (&throw! "unmatched delimiter " delim)
     )
 
@@ -1194,7 +1215,7 @@
     )
 )
 
-(defn read [] (Reader'read Beagle'in, nil, nil, nil))
+(defn read [] (Reader'read Beagle'in, nil, nil))
 
 (defn repl []
     (let [esc Unicode'escape] (print (str esc "[31mBeagle " esc "[32m=> " esc "[0m")))
