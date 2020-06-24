@@ -378,8 +378,40 @@
 
 (defn update [m k f & s] (assoc m k (apply f (get m k) s)))
 
+(defn memoize1 [f]
+    (let [m (atom nil)]
+        (fn [x]
+            (let [e (ConsMap''find (deref m), x)]
+                (if (some? e)
+                    (second e)
+                    (let [r (f x)]
+                        (swap! m assoc x r)
+                        r
+                    )
+                )
+            )
+        )
+    )
+)
+
+(defn memoize [f]
+    (let [m (atom nil)]
+        (fn [& s]
+            (let [e (ConsMap''find (deref m), s)]
+                (if (some? e)
+                    (second e)
+                    (let [r (apply f s)]
+                        (swap! m assoc s r)
+                        r
+                    )
+                )
+            )
+        )
+    )
+)
+
 (about #_"String"
-    (defn String'new [s] (&meta &'string s))
+    (def String'new (#_memoize1 identity (fn [s] (&meta &'string s))))
 
     (defn string? [x] (and (&meta? x) (= (&car x) &'string)))
 
@@ -397,7 +429,7 @@
 (defn string! [s] (if (-/-string? s) (String'new (reverse (reverse s))) s))
 
 (about #_"Symbol"
-    (defn Symbol'new [s] (&meta &'symbol s))
+    (def Symbol'new (#_memoize1 identity (fn [s] (&meta &'symbol s))))
 
     (defn symbol? [x] (and (&meta? x) (= (&car x) &'symbol)))
 
