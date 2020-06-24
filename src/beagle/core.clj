@@ -13,7 +13,7 @@
     )
 )
 
-(refer! clojure.core [= aget and apply aset char char? class cond conj cons declare defmacro defn first fn fn? identical? int let list loop neg? next not number? object-array or seq seq? seqable? sequential? some? str string? symbol symbol? the-ns time when])
+(refer! clojure.core [+ - = aget alength and apply aset atom char char? cond conj cons declare defmacro defn deref first fn fn? identical? int let list loop neg? next not number? object-array or seq seq? seqable? sequential? str string? swap! symbol symbol? the-ns time when])
 
 (defn &throw! [& s] (throw (Error. (apply str s))))
 
@@ -44,19 +44,29 @@
 (def -string?     string?)
 (def -symbol?     symbol?)
 
-(defn &car [s] (aget s 1))
-(defn &cdr [s] (aget s 2))
+(def Beagle'ram (object-array #_536870912 16777216))
+(def Beagle'gc (atom (alength Beagle'ram)))
 
-(defn &volatile-cas-cdr! [a x y] (when (identical? (aget a 2) x) (aset a 2 y) a))
-(defn &volatile-get-cdr  [a]     (aget a 2))
-(defn &volatile-set-cdr! [a x]   (aset a 2 x) a)
+(defn &anew [n] (let [a (swap! Beagle'gc - n)] (if (neg? a) (&throw! "ram non più at " a) a)))
 
-(defn &cons  [car cdr] (let [a (object-array 3)] (aset a 0 false) (aset a 1 car) (aset a 2 cdr) a))
-(defn &meta  [car cdr] (let [a (object-array 3)] (aset a 0 true)  (aset a 1 car) (aset a 2 cdr) a))
-(defn &meta! [car cdr] (let [a (object-array 3)] (aset a 0 true)  (aset a 1 car) (&volatile-set-cdr! a cdr)))
+(defn &aget [a i]   (aget Beagle'ram (+ a i)))
+(defn &aset [a i x] (aset Beagle'ram (+ a i) x))
 
-(defn &cons? [x] (and (some? x) (.isArray (class x)) (not (aget x 0))))
-(defn &meta? [x] (and (some? x) (.isArray (class x))      (aget x 0)))
+(defn &car [s] (&aget s 1))
+(defn &cdr [s] (&aget s 2))
+
+(defn &volatile-cas-cdr! [a x y] (when (identical? (&aget a 2) x) (&aset a 2 y) a))
+(defn &volatile-get-cdr  [a]     (&aget a 2))
+(defn &volatile-set-cdr! [a x]   (&aset a 2 x) a)
+
+(defn &cons  [car cdr] (let [a (&anew 3)] (&aset a 0 false) (&aset a 1 car) (&aset a 2 cdr) a))
+(defn &meta  [car cdr] (let [a (&anew 3)] (&aset a 0 true)  (&aset a 1 car) (&aset a 2 cdr) a))
+(defn &meta! [car cdr] (let [a (&anew 3)] (&aset a 0 true)  (&aset a 1 car) (&volatile-set-cdr! a cdr)))
+
+(def &array? number?)
+
+(defn &cons? [x] (and (&array? x) (not (&aget x 0))))
+(defn &meta? [x] (and (&array? x)      (&aget x 0)))
 
 (ns beagle.core
     (:refer-clojure :only [])
@@ -81,8 +91,10 @@
 (defn -var-find    [_]                           (&throw! "-var-find non più"))
 (defn -var-get     [_]                           (&throw! "-var-get non più"))
 
+(defn eager! [s] (if (-/-fn? s) (-/-apply s nil) s))
+
 (-/defmacro about    [& s] (-/cons 'do s))
-(-/defmacro lazy-seq [& s] (-/cons 'fn (-/cons [] s)))
+(-/defmacro lazy-seq [& s] (-/list 'eager! (-/cons 'fn (-/cons [] s))))
 (-/defmacro &do      [& s] (-/cons 'do s))
 
 (about #_"Beagle")
@@ -117,8 +129,6 @@
             'else           (&throw! "seq not supported on " s)
         )
     )
-
-    (defn eager! [s] (if (-/-fn? s) (-/-apply s nil) s))
 
     (declare Cons''first)
 
@@ -780,7 +790,7 @@
         (let [
             args (map (fn [%] (Compiler'analyze %, scope)) (next form))
         ]
-            (cons (first form) (eager! args))
+            (cons (first form) args)
         )
     )
 )
@@ -791,7 +801,7 @@
             fexpr (Compiler'analyze (first form), scope)
             args (map (fn [%] (Compiler'analyze %, scope)) (next form))
         ]
-            (list (symbol! '&apply) fexpr (eager! args))
+            (list (symbol! '&apply) fexpr args)
         )
     )
 )
