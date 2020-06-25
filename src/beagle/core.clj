@@ -13,7 +13,7 @@
     )
 )
 
-(refer! clojure.core [+ - = aget alength and apply aset atom char char? cond conj cons declare defmacro defn deref first fn fn? identical? int let list loop neg? next not number? object-array or seq seq? seqable? sequential? str string? swap! symbol symbol? the-ns time when])
+(refer! clojure.core [+ - = aget alength and apply aset atom char char? cond conj cons declare defmacro defn deref first fn fn? identical? int let list loop neg? next not number? object-array or seq seq? seqable? sequential? str string? swap! symbol symbol? the-ns time var? when])
 
 (defn &throw! [& s] (throw (Error. (apply str s))))
 
@@ -26,10 +26,6 @@
 (defn &append [_ x] (.append *out*, x) _)
 (defn &flush  [_]   (.flush *out*) _)
 
-(defn -var-find [s] (.findInternedVar (the-ns 'beagle.core), (symbol s)))
-(defn -var-get  [v] (.get v))
-
-(def -=           =)
 (def -apply       apply)
 (def -conj        conj)
 (def -first       first)
@@ -43,8 +39,12 @@
 (def -str         str)
 (def -string?     string?)
 (def -symbol?     symbol?)
+(def -var?        var?)
 
-(def Beagle'ram (object-array #_536870912 16777216))
+(defn -var-find [s] (.findInternedVar (the-ns 'beagle.core), (symbol s)))
+(defn -var-get  [v] (.get v))
+
+(def Beagle'ram (object-array 4194304))
 (def Beagle'gc (atom (alength Beagle'ram)))
 
 (defn &anew [n] (let [a (swap! Beagle'gc - n)] (if (neg? a) (&throw! "ram non più at " a) a)))
@@ -75,7 +75,6 @@
 
 (-/refer! beagle.bore [and &append &bits &bits? &bits= &car &cdr cond cons &cons &cons? declare defn &flush fn &identical? let list loop &meta &meta! &meta? or &read &throw! &unread &volatile-cas-cdr! &volatile-get-cdr &volatile-set-cdr! when])
 
-(defn -=           [_ _]                         (&throw! "-= non più"))
 (defn -apply       [_ _]                         (&throw! "-apply non più"))
 (defn -conj        [_ _]                         (&throw! "-conj non più"))
 (defn -first       [_]                           (&throw! "-first non più"))
@@ -88,6 +87,7 @@
 (defn -str         [& _]                         (&throw! "-str non più"))
 (defn -string?     [x]   (and (-/-string? x)     (&throw! "-string? non più")))
 (defn -symbol?     [x]   (and (-/-symbol? x)     (&throw! "-symbol? non più")))
+(defn -var?        [x]   (and (-/-var? x)        (&throw! "-var? non più")))
 (defn -var-find    [_]                           (&throw! "-var-find non più"))
 (defn -var-get     [_]                           (&throw! "-var-get non più"))
 
@@ -125,6 +125,7 @@
             (symbol? s)     (Symbol''seq s)
             (closure? s)    (Closure''seq s)
             (-/-seqable? s) (-/-seq s)
+            (-/-symbol? s)  (-/-seq (-/-str s))
             (-/-fn? s)      (-/-apply s nil)
             'else           (&throw! "seq not supported on " s)
         )
@@ -187,7 +188,7 @@
 
     (declare apply)
 
-    (defn Atom''swap [this, f, s]
+    (defn Atom''swap! [this, f, s]
         (loop []
             (let [o (&volatile-get-cdr this) o' (apply f o s)]
                 (if (&volatile-cas-cdr! this o o') o' (recur))
@@ -195,7 +196,7 @@
         )
     )
 
-    (defn Atom''reset [this, o']
+    (defn Atom''reset! [this, o']
         (&volatile-set-cdr! this o')
         o'
     )
@@ -205,21 +206,22 @@
 
 (defn deref [a]
     (cond
-        (atom? a) (Atom''deref a)
-        'else     (&throw! "deref not supported on " a)
+        (atom? a)   (Atom''deref a)
+        (-/-var? a) (-/-var-get a)
+        'else       (&throw! "deref not supported on " a)
     )
 )
 
 (defn swap! [a f & s]
     (cond
-        (atom? a) (Atom''swap a, f, s)
+        (atom? a) (Atom''swap! a, f, s)
         'else     (&throw! "swap! not supported on " a)
     )
 )
 
 (defn reset! [a x]
     (cond
-        (atom? a) (Atom''reset a, x)
+        (atom? a) (Atom''reset! a, x)
         'else     (&throw! "reset! not supported on " a)
     )
 )
@@ -232,19 +234,6 @@
     (defn Cons''seq   [this]            this)
     (defn Cons''first [this]      (&car this))
     (defn Cons''next  [this] (seq (&cdr this)))
-
-    (defn Cons''equals [this, that]
-        (or (identical? this that)
-            (and (or (cons? that) (list? that) (-/-sequential? that))
-                (loop [s (seq this) z (seq that)]
-                    (if (some? s)
-                        (and (some? z) (= (first s) (first z)) (recur (next s) (next z)))
-                        (nil? z)
-                    )
-                )
-            )
-        )
-    )
 )
 
 (about #_"List"
@@ -253,14 +242,6 @@
     (defn list? [x] (and (&meta? x) (= (&car x) &'list)))
 
     (defn List''seq [this] (seq (&cdr this)))
-
-    (defn List''equals [this, that]
-        (or (identical? this that)
-            (and (or (cons? that) (list? that) (-/-sequential? that))
-                (= (seq this) (seq that))
-            )
-        )
-    )
 )
 
 (defn cons [x s] (Cons'new x, s))
@@ -378,22 +359,6 @@
 
 (defn update [m k f & s] (assoc m k (apply f (get m k) s)))
 
-(defn memoize1 [f]
-    (let [m (atom nil)]
-        (fn [x]
-            (let [e (ConsMap''find (deref m), x)]
-                (if (some? e)
-                    (second e)
-                    (let [r (f x)]
-                        (swap! m assoc x r)
-                        r
-                    )
-                )
-            )
-        )
-    )
-)
-
 (defn memoize [f]
     (let [m (atom nil)]
         (fn [& s]
@@ -411,7 +376,7 @@
 )
 
 (about #_"String"
-    (def String'new (#_memoize1 identity (fn [s] (&meta &'string s))))
+    (def String'new (memoize (fn [s] (&meta &'string s))))
 
     (defn string? [x] (and (&meta? x) (= (&car x) &'string)))
 
@@ -419,30 +384,23 @@
 
     (defn String''equals [this, that]
         (or (identical? this that)
-            (and (string? that)
+            (and (or (string? that) (-/-string? that))
                 (= (seq this) (seq that))
             )
         )
     )
 )
 
-(defn string! [s] (if (-/-string? s) (String'new (reverse (reverse s))) s))
-
 (about #_"Symbol"
-    (def Symbol'new (#_memoize1 identity (fn [s] (&meta &'symbol s))))
+    (def Symbol'new (memoize (fn [s] (&meta &'symbol s))))
 
     (defn symbol? [x] (and (&meta? x) (= (&car x) &'symbol)))
 
     (defn Symbol''seq [this] (seq (&cdr this)))
 
-    (declare Unicode'minus)
-    (declare Unicode'slash)
-
-    (defn Symbol''alt? [this] (and (= (first this) Unicode'minus) (= (second this) Unicode'slash)))
-
     (defn Symbol''equals [this, that]
         (or (identical? this that)
-            (and (symbol? that)
+            (and (or (symbol? that) (-/-symbol? that))
                 (= (seq this) (seq that))
             )
         )
@@ -598,27 +556,26 @@
     )
 
     (defn Var'find [sym]
-        (if (not (Symbol''alt? sym))
+        (or
             (get (deref Beagle'ns) sym)
-            (-/-var-find (apply -/-str (next (next sym))))
+            (when (and (= (first sym) Unicode'minus) (= (second sym) Unicode'slash))
+                (-/-var-find (apply -/-str (next (next sym))))
+            )
         )
     )
 
     (defn Var'lookup [sym]
-        (if (not (Symbol''alt? sym))
-            (or
-                (get (deref Beagle'ns) sym)
-                (let [v (Var'new)]
-                    (swap! Beagle'ns assoc sym v)
-                    v
-                )
+        (or
+            (get (deref Beagle'ns) sym)
+            (let [v (Var'new)]
+                (swap! Beagle'ns assoc sym v)
+                v
             )
-            (&throw! "can't create defs for alt ns")
         )
     )
 
     (defn Var''get [this]
-        (if (atom? this) (deref this) (-/-var-get this))
+        (deref this)
     )
 
     (defn Var''set [this, root]
@@ -627,22 +584,33 @@
     )
 )
 
+(about #_"Sequential"
+    (defn sequential? [x] (or (cons? x) (list? x)))
+
+    (defn Sequential''equals [this, that]
+        (or (identical? this that)
+            (and (or (sequential? that) (-/-sequential? that))
+                (loop [s (seq this) z (seq that)]
+                    (if (some? s)
+                        (and (some? z) (= (first s) (first z)) (recur (next s) (next z)))
+                        (nil? z)
+                    )
+                )
+            )
+        )
+    )
+)
+
 (defn = [x y]
-    (cond
-        (identical? x y) true
-        (or (nil? x) (nil? y) (true? x) (true? y) (false? x) (false? y)) false
-        (or (bits? x) (bits? y)) (&bits= x y)
-        (cons? x)       (Cons''equals x, y)
-        (cons? y)       (Cons''equals y, x)
-        (list? x)       (List''equals x, y)
-        (list? y)       (List''equals y, x)
-        (string? x)     (String''equals x, (string! y))
-        (string? y)     (String''equals y, (string! x))
-        (or (-/-string? x) (-/-string? y)) (-/-= x y)
-        (symbol? x)     (Symbol''equals x, (symbol! y))
-        (symbol? y)     (Symbol''equals y, (symbol! x))
-        (or (-/-symbol? x) (-/-symbol? y)) (-/-= x y)
-        'else           (&throw! "= not supported on " x ", not even on " y)
+    (or (identical? x y)
+        (cond
+            (or (nil? x) (true? x) (false? x))       false
+            (bits? x)                               (&bits= x y)
+            (or (sequential? x) (-/-sequential? x)) (Sequential''equals x, y)
+            (or (string? x)     (-/-string? x))     (String''equals x, y)
+            (or (symbol? x)     (-/-symbol? x))     (Symbol''equals x, y)
+            'else                                   (&throw! "= not supported on " x)
+        )
     )
 )
 
@@ -709,20 +677,20 @@
 
     (defn append [a x]
         (cond
-            (nil? x)       (append' a "nil")
-            (true? x)      (append' a "true")
-            (false? x)     (append' a "false")
-            (bits? x)      (append' a "bits")
-            (or (cons? x) (list? x)) (append-seq a x)
-            (string? x)    (append-str a x)
-            (symbol? x)    (append-sym a x)
-            (atom? x)      (append' a "atom")
-            (closure? x)   (append' a "closure")
-            (-/-seq? x)    (append' a "-seq")
-            (-/-string? x) (append' a "-string")
-            (-/-symbol? x) (append' a "-symbol")
-            (-/-fn? x)     (append' a "-fn")
-            'else          (&throw! "append not supported on " x)
+            (nil? x)        (append' a "nil")
+            (true? x)       (append' a "true")
+            (false? x)      (append' a "false")
+            (bits? x)       (append' a "bits")
+            (sequential? x) (append-seq a x)
+            (string? x)     (append-str a x)
+            (symbol? x)     (append-sym a x)
+            (atom? x)       (append' a "atom")
+            (closure? x)    (append' a "closure")
+            (-/-seq? x)     (append' a "-seq")
+            (-/-string? x)  (append' a "-string")
+            (-/-symbol? x)  (append' a "-symbol")
+            (-/-fn? x)      (append' a "-fn")
+            'else           (&throw! "append not supported on " x)
         )
     )
 
@@ -776,17 +744,19 @@
     (defn println [& s] (apply print s) (newline) (flush) nil)
 )
 
-(about #_"LiteralExpr"
-    (def LiteralExpr'NIL   (list (symbol! '&literal) nil))
-    (def LiteralExpr'TRUE  (list (symbol! '&literal) true))
-    (def LiteralExpr'FALSE (list (symbol! '&literal) false))
+(def &'literal  (&bits '1110000000001000))
+(def &'binding  (&bits '1110000000001001))
+(def &'if       (&bits '1110000000001010))
+(def &'apply    (&bits '1110000000001011))
+(def &'fn       (&bits '1110000000001100))
+(def &'var-get  (&bits '1110000000001101))
+(def &'var-set! (&bits '1110000000001110))
 
+(about #_"LiteralExpr"
     (defn LiteralExpr'create [form]
-        (cond
-            (nil? form)    LiteralExpr'NIL
-            (true? form)   LiteralExpr'TRUE
-            (false? form)  LiteralExpr'FALSE
-            'else         (list (symbol! '&literal) form)
+        (if (or (nil? form) (true? form) (false? form))
+            form
+            (list &'literal form)
         )
     )
 
@@ -812,7 +782,7 @@
             then (Compiler'analyze (third form), scope)
             else (Compiler'analyze (fourth form), scope)
         ]
-            (list (symbol! '&if) test then else)
+            (list &'if test then else)
         )
     )
 )
@@ -833,7 +803,7 @@
             fexpr (Compiler'analyze (first form), scope)
             args (map (fn [%] (Compiler'analyze %, scope)) (next form))
         ]
-            (list (symbol! '&apply) fexpr args)
+            (list &'apply fexpr args)
         )
     )
 )
@@ -847,22 +817,19 @@
                     (if (some? s)
                         (let [sym (symbol! (first s))]
                             (if (symbol? sym)
-                                (if (not (Symbol''alt? sym))
-                                    (cond
-                                        (= sym '&)
-                                            (if (not variadic?)
-                                                (recur pars etal true (next s))
-                                                (&throw! "overkill variadic parameter list")
-                                            )
-                                        (some? etal)
-                                            (&throw! "excess variadic parameter " sym)
-                                        'else
-                                            (if (not variadic?)
-                                                (recur (cons sym pars) etal variadic? (next s))
-                                                (recur           pars  sym  variadic? (next s))
-                                            )
-                                    )
-                                    (&throw! "can't use alt name as parameter " sym)
+                                (cond
+                                    (= sym '&)
+                                        (if (not variadic?)
+                                            (recur pars etal true (next s))
+                                            (&throw! "overkill variadic parameter list")
+                                        )
+                                    (some? etal)
+                                        (&throw! "excess variadic parameter " sym)
+                                    'else
+                                        (if (not variadic?)
+                                            (recur (cons sym pars) etal variadic? (next s))
+                                            (recur           pars  sym  variadic? (next s))
+                                        )
                                 )
                                 (&throw! "function parameters must be symbols")
                             )
@@ -883,7 +850,7 @@
                 )
             body (EmbedExpr'parse (cons (symbol! '&do) (next form)), scope)
         ]
-            (list (symbol! '&fn) self pars etal body)
+            (list &'fn self pars etal body)
         )
     )
 )
@@ -896,7 +863,7 @@
         )
         (let [s (symbol! (second form))]
             (if (symbol? s)
-                (list (symbol! '&var-set!) (Var'lookup s) (Compiler'analyze (third form), scope))
+                (list &'var-set! (Var'lookup s) (Compiler'analyze (third form), scope))
                 (&throw! "first argument to def must be a symbol")
             )
         )
@@ -961,11 +928,11 @@
                 (let [form (symbol! form)]
                     (or
                         (when (some (fn [%] (= % form)) scope)
-                            (list (symbol! '&binding) form)
+                            (list &'binding form)
                         )
                         (let [v (Var'find form)]
                             (when (some? v)
-                                (list (symbol! '&var-get) v)
+                                (list &'var-get v)
                             )
                         )
                         (&throw! "unable to resolve symbol " form)
@@ -1013,16 +980,19 @@
     )
 
     (defn Machine'compute [form, env]
-        (let [f (first form) f'compute (fn [%] (Machine'compute %, env))]
-            (cond
-                (= f '&literal)  (second form)
-                (= f '&binding)  (get env (second form))
-                (= f '&if)       (f'compute (if (f'compute (second form)) (third form) (fourth form)))
-                (= f '&apply)    (apply (f'compute (second form)) (map f'compute (third form)))
-                (= f '&fn)       (Closure'new form, env)
-                (= f '&var-get)  (Var''get (second form))
-                (= f '&var-set!) (Var''set (second form), (f'compute (third form)))
-                'else            (&embed f (map f'compute (next form)))
+        (if (or (nil? form) (true? form) (false? form))
+            form
+            (let [f (first form) f'compute (fn [%] (Machine'compute %, env))]
+                (cond
+                    (= f &'literal)  (second form)
+                    (= f &'binding)  (get env (second form))
+                    (= f &'if)       (f'compute (if (f'compute (second form)) (third form) (fourth form)))
+                    (= f &'apply)    (apply (f'compute (second form)) (map f'compute (third form)))
+                    (= f &'fn)       (Closure'new form, env)
+                    (= f &'var-get)  (Var''get (second form))
+                    (= f &'var-set!) (Var''set (second form), (f'compute (third form)))
+                    'else            (&embed f (map f'compute (next form)))
+                )
             )
         )
     )
