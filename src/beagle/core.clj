@@ -407,7 +407,9 @@
     )
 )
 
-(defn symbol! [s] (if (-/-symbol? s) (Symbol'new (reverse (reverse (-/-str s)))) s))
+(def -symbol! (memoize (fn [s] (Symbol'new (reverse (reverse (-/-str s)))))))
+
+(defn symbol! [s] (if (-/-symbol? s) (-symbol! s) s))
 
 (about #_"unicode"
     (defn bits [s] (&bits s))
@@ -811,11 +813,11 @@
 (about #_"FnExpr"
     (defn FnExpr'parse [form, scope]
         (let [
-            self (symbol! (second form)) ? (symbol? self) self (when ? self) form (if ? (next (next form)) (next form))
+            self (second form) ? (symbol? self) self (when ? self) form (if ? (next (next form)) (next form))
             _
                 (loop [pars nil etal nil variadic? false s (seq (first form))]
                     (if (some? s)
-                        (let [sym (symbol! (first s))]
+                        (let [sym (first s)]
                             (if (symbol? sym)
                                 (cond
                                     (= sym '&)
@@ -861,7 +863,7 @@
             (nil? (next (next form)))         (&throw! "too few arguments to def")
             (some? (next (next (next form)))) (&throw! "too many arguments to def")
         )
-        (let [s (symbol! (second form))]
+        (let [s (second form)]
             (if (symbol? s)
                 (list &'var-set! (Var'lookup s) (Compiler'analyze (third form), scope))
                 (&throw! "first argument to def must be a symbol")
@@ -877,10 +879,10 @@
             (= m 'declare)  (fn [x]     (list 'def x nil))
             (= m 'when)     (fn [? & s] (list 'if ? (cons (symbol! '&do) s) nil))
             (= m 'cond)     (fn [& s]   (when s (list 'if (first s) (second s) (cons 'cond (next (next s))))))
-            (= m 'and)      (fn [& s]   (if s (let [x (first s) s (next s)] (if s (list 'let (list '&and x) (list 'if '&and (cons 'and s) '&and)) x)) true))
-            (= m 'or)       (fn [& s]   (when s (let [x (first s) s (next s)] (if s (list 'let (list '&or x) (list 'if '&or '&or (cons 'or s))) x))))
+            (= m 'and)      (fn [& s]   (if s (let [x (first s) s (next s)] (if s (list 'let (list (symbol! '&and) x) (list 'if (symbol! '&and) (cons 'and s) (symbol! '&and))) x)) true))
+            (= m 'or)       (fn [& s]   (when s (let [x (first s) s (next s)] (if s (list 'let (list (symbol! '&or) x) (list 'if (symbol! '&or) (symbol! '&or) (cons 'or s))) x))))
             (= m 'let)      (fn [a & s] (if (seq a) (list (list 'fn (list (first a)) (cons 'let (cons (next (next a)) s))) (second a)) (cons (symbol! '&do) s)))
-            (= m 'loop)     (fn [a & s] (cons (cons 'fn (cons 'recur (cons (ConsMap''keys a) s))) (ConsMap''vals a)))
+            (= m 'loop)     (fn [a & s] (cons (cons 'fn (cons (symbol! 'recur) (cons (ConsMap''keys a) s))) (ConsMap''vals a)))
             (= m 'defn)     (fn [f & s] (list 'def f (cons 'fn s)))
             (= m 'lazy-seq) (fn [& s]   (cons 'fn (cons [] s)))
         )
