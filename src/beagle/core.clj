@@ -13,7 +13,7 @@
     )
 )
 
-(refer! clojure.core [+ - = aget alength and apply aset atom char char? cond conj cons declare defmacro defn deref first fn fn? identical? int let list loop neg? next not number? object-array or seq seq? seqable? sequential? str string? swap! symbol symbol? the-ns time var? when])
+(refer! clojure.core [+ - = aget alength and apply aset atom char char? cond conj cons declare defmacro defn deref first fn fn? identical? int let list loop memoize neg? next not number? object-array or seq seq? seqable? sequential? str string? swap! symbol symbol? the-ns time var? when])
 
 (defn &throw! [& s] (throw (Error. (apply str s))))
 
@@ -359,6 +359,22 @@
 
 (defn update [m k f & s] (assoc m k (apply f (get m k) s)))
 
+(defn memoize1 [f]
+    (let [m (atom nil)]
+        (fn [x]
+            (let [e (ConsMap''find (deref m), x)]
+                (if (some? e)
+                    (second e)
+                    (let [r (f x)]
+                        (swap! m assoc x r)
+                        r
+                    )
+                )
+            )
+        )
+    )
+)
+
 (defn memoize [f]
     (let [m (atom nil)]
         (fn [& s]
@@ -376,7 +392,7 @@
 )
 
 (about #_"String"
-    (def String'new (memoize (fn [s] (&meta &'string s))))
+    (def String'new (memoize1 (fn [s] (&meta &'string s))))
 
     (defn string? [x] (and (&meta? x) (= (&car x) &'string)))
 
@@ -392,7 +408,7 @@
 )
 
 (about #_"Symbol"
-    (def Symbol'new (memoize (fn [s] (&meta &'symbol s))))
+    (def Symbol'new (memoize1 (fn [s] (&meta &'symbol s))))
 
     (defn symbol? [x] (and (&meta? x) (= (&car x) &'symbol)))
 
@@ -407,9 +423,9 @@
     )
 )
 
-(def -symbol! (memoize (fn [s] (Symbol'new (reverse (reverse (-/-str s)))))))
+(def -symbol! (-/memoize (fn [s] (Symbol'new (reverse (reverse (-/-str s)))))))
 
-(defn symbol! [s] (if (-/-symbol? s) (-symbol! s) s))
+(defn ! [s] (if (-/-symbol? s) (-symbol! s) s))
 
 (about #_"unicode"
     (defn bits [s] (&bits s))
@@ -557,20 +573,20 @@
         (atom nil)
     )
 
-    (defn Var'find [sym]
+    (defn Var'find [s]
         (or
-            (get (deref Beagle'ns) sym)
-            (when (and (= (first sym) Unicode'minus) (= (second sym) Unicode'slash))
-                (-/-var-find (apply -/-str (next (next sym))))
+            (get (deref Beagle'ns) s)
+            (when (and (= (first s) Unicode'minus) (= (second s) Unicode'slash))
+                (-/-var-find (apply -/-str (next (next s))))
             )
         )
     )
 
-    (defn Var'lookup [sym]
+    (defn Var'lookup [s]
         (or
-            (get (deref Beagle'ns) sym)
+            (get (deref Beagle'ns) s)
             (let [v (Var'new)]
-                (swap! Beagle'ns assoc sym v)
+                (swap! Beagle'ns assoc s v)
                 v
             )
         )
@@ -817,20 +833,20 @@
             _
                 (loop [pars nil etal nil variadic? false s (seq (first form))]
                     (if (some? s)
-                        (let [sym (first s)]
-                            (if (symbol? sym)
+                        (let [x (first s)]
+                            (if (symbol? x)
                                 (cond
-                                    (= sym '&)
+                                    (= x (! '&))
                                         (if (not variadic?)
                                             (recur pars etal true (next s))
                                             (&throw! "overkill variadic parameter list")
                                         )
                                     (some? etal)
-                                        (&throw! "excess variadic parameter " sym)
+                                        (&throw! "excess variadic parameter " x)
                                     'else
                                         (if (not variadic?)
-                                            (recur (cons sym pars) etal variadic? (next s))
-                                            (recur           pars  sym  variadic? (next s))
+                                            (recur (cons x pars) etal variadic? (next s))
+                                            (recur         pars  x    variadic? (next s))
                                         )
                                 )
                                 (&throw! "function parameters must be symbols")
@@ -850,7 +866,7 @@
                         (if (some? etal) (cons etal scope) scope)
                     )
                 )
-            body (EmbedExpr'parse (cons (symbol! '&do) (next form)), scope)
+            body (EmbedExpr'parse (cons (! '&do) (next form)), scope)
         ]
             (list &'fn self pars etal body)
         )
@@ -875,16 +891,16 @@
 (about #_"Compiler"
     (defn Compiler'macro [m]
         (cond
-            (= m 'about)    (fn [& s]   (cons (symbol! '&do) s))
-            (= m 'declare)  (fn [x]     (list 'def x nil))
-            (= m 'when)     (fn [? & s] (list 'if ? (cons (symbol! '&do) s) nil))
-            (= m 'cond)     (fn [& s]   (when s (list 'if (first s) (second s) (cons 'cond (next (next s))))))
-            (= m 'and)      (fn [& s]   (if s (let [x (first s) s (next s)] (if s (list 'let (list (symbol! '&and) x) (list 'if (symbol! '&and) (cons 'and s) (symbol! '&and))) x)) true))
-            (= m 'or)       (fn [& s]   (when s (let [x (first s) s (next s)] (if s (list 'let (list (symbol! '&or) x) (list 'if (symbol! '&or) (symbol! '&or) (cons 'or s))) x))))
-            (= m 'let)      (fn [a & s] (if (seq a) (list (list 'fn (list (first a)) (cons 'let (cons (next (next a)) s))) (second a)) (cons (symbol! '&do) s)))
-            (= m 'loop)     (fn [a & s] (cons (cons 'fn (cons (symbol! 'recur) (cons (ConsMap''keys a) s))) (ConsMap''vals a)))
-            (= m 'defn)     (fn [f & s] (list 'def f (cons 'fn s)))
-            (= m 'lazy-seq) (fn [& s]   (cons 'fn (cons [] s)))
+            (= m 'about)    (fn [& s]   (cons (! '&do) s))
+            (= m 'declare)  (fn [x]     (list (! 'def) x nil))
+            (= m 'when)     (fn [? & s] (list (! 'if) ? (cons (! '&do) s) nil))
+            (= m 'cond)     (fn [& s]   (when s (list (! 'if) (first s) (second s) (cons (! 'cond) (next (next s))))))
+            (= m 'and)      (fn [& s]   (if s (let [x (first s) s (next s)] (if s (list (! 'let) (list (! '&and) x) (list (! 'if) (! '&and) (cons (! 'and) s) (! '&and))) x)) true))
+            (= m 'or)       (fn [& s]   (when s (let [x (first s) s (next s)] (if s (list (! 'let) (list (! '&or) x) (list (! 'if) (! '&or) (! '&or) (cons (! 'or) s))) x))))
+            (= m 'let)      (fn [a & s] (if (seq a) (list (list (! 'fn) (list (first a)) (cons (! 'let) (cons (next (next a)) s))) (second a)) (cons (! '&do) s)))
+            (= m 'loop)     (fn [a & s] (cons (cons (! 'fn) (cons (! 'recur) (cons (ConsMap''keys a) s))) (ConsMap''vals a)))
+            (= m 'defn)     (fn [f & s] (list (! 'def) f (cons (! 'fn) s)))
+            (= m 'lazy-seq) (fn [& s]   (cons (! 'fn) (cons #_[] nil s)))
         )
     )
 
@@ -926,21 +942,20 @@
                         (#_recur Compiler'analyze me, scope)
                     )
                 )
-            (or (symbol? form) (-/-symbol? form))
-                (let [form (symbol! form)]
-                    (or
-                        (when (some (fn [%] (= % form)) scope)
-                            (list &'binding form)
-                        )
-                        (let [v (Var'find form)]
-                            (when (some? v)
-                                (list &'var-get v)
-                            )
-                        )
-                        (&throw! "unable to resolve symbol " form)
+            (symbol? form)
+                (or
+                    (when (some (fn [%] (= % form)) scope)
+                        (list &'binding form)
                     )
+                    (let [v (Var'find form)]
+                        (when (some? v)
+                            (list &'var-get v)
+                        )
+                    )
+                    (&throw! "unable to resolve symbol " form)
                 )
-            'else (LiteralExpr'create form)
+            'else
+                (LiteralExpr'create form)
         )
     )
 )
@@ -1176,7 +1191,7 @@
     )
 
     (defn quote-reader [r, _delim]
-        (list 'quote (Reader'read r, nil, nil))
+        (list (! 'quote) (Reader'read r, nil, nil))
     )
 
     (declare Reader'dispatchMacro)
