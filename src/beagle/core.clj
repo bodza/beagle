@@ -244,7 +244,9 @@
     (defn List''seq [this] (seq (&cdr this)))
 )
 
-(defn cons [x s] (Cons'new x, s))
+(declare reverse)
+
+(defn cons [x s] (Cons'new x, (if (-/-seq? s) (reverse (reverse s)) s)))
 
 (defn conj [s x] (cons x s))
 
@@ -252,7 +254,7 @@
     (cond
         (nil? s)         nil
         (nil? (next s)) (seq (first s))
-        'else           (cons (first s) (spread (next s)))
+        'else           ((if (-/-seq? s) -/cons cons) (first s) (spread (next s)))
     )
 )
 
@@ -560,7 +562,7 @@
         (cond
             (closure? f) (Closure''apply f, s)
             (atom? f)    (#_recur apply (deref f) s)
-            (-/-fn? f)   (-/-apply f (reduce -/-conj (-/list) (reverse s)))
+            (-/-fn? f)   (-/-apply f (if (-/-seq? s) s (reduce -/-conj (-/list) (reverse s))))
             'else        (&throw! "apply not supported on " f)
         )
     )
