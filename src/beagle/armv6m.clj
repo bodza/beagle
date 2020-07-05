@@ -1,5 +1,5 @@
 (ns beagle.armv6m
-    (:refer-clojure :only [& * + - < << <= >> >>> | aget and aset bit-not byte-array cons defmacro defn first next object-array or when])
+    (:refer-clojure :only [* + - < << <= = >> >>> aget and aset bit-and bit-not bit-or bit-xor byte-array cons dec defmacro defn first if-not inc next not object-array or pos? when when-not zero?])
 )
 
 (defmacro § [& _])
@@ -136,21 +136,21 @@
     )
 
     (defn #_"u16" ram''read16 [#_"ram" this, #_"u32" addr]
-        (ß (#_"u16")
-            (|
-                (<< (ß (#_"u32")(ram''read8 this, (+ addr 0))) 0)
-                (<< (ß (#_"u32")(ram''read8 this, (+ addr 1))) 8)
+        (§ cast #_"u16"
+            (bit-or
+                (<< (§ cast #_"u32" (ram''read8 this, (+ addr 0))) 0)
+                (<< (§ cast #_"u32" (ram''read8 this, (+ addr 1))) 8)
             )
         )
     )
 
     (defn #_"u32" ram''read32 [#_"ram" this, #_"u32" addr]
-        (ß (#_"u32")
-            (|
-                (<< (ß (#_"u32")(ram''read8 this, (+ addr 0))) 0)
-                (<< (ß (#_"u32")(ram''read8 this, (+ addr 1))) 8)
-                (<< (ß (#_"u32")(ram''read8 this, (+ addr 2))) 16)
-                (<< (ß (#_"u32")(ram''read8 this, (+ addr 3))) 24)
+        (§ cast #_"u32"
+            (bit-or
+                (<< (§ cast #_"u32" (ram''read8 this, (+ addr 0))) 0)
+                (<< (§ cast #_"u32" (ram''read8 this, (+ addr 1))) 8)
+                (<< (§ cast #_"u32" (ram''read8 this, (+ addr 2))) 16)
+                (<< (§ cast #_"u32" (ram''read8 this, (+ addr 3))) 24)
             )
         )
     )
@@ -163,24 +163,24 @@
     (def reg'PC    15)
     (def REGISTERS 16)
 
-    (def shift'APSR_N 31)
-    (def shift'APSR_Z 30)
-    (def shift'APSR_C 29)
-    (def shift'APSR_V 28)
+    (def shift'N 31)
+    (def shift'Z 30)
+    (def shift'C 29)
+    (def shift'V 28)
 
-    (def APSR_N (<< 1 shift'APSR_N))
-    (def APSR_Z (<< 1 shift'APSR_Z))
-    (def APSR_C (<< 1 shift'APSR_C))
-    (def APSR_V (<< 1 shift'APSR_V))
+    (def flag'N (<< 1 shift'N))
+    (def flag'Z (<< 1 shift'Z))
+    (def flag'C (<< 1 shift'C))
+    (def flag'V (<< 1 shift'V))
 
-    (def ALL_FLAGS (| APSR_N APSR_Z APSR_C APSR_V))
-    (def FLAGS_NZC (| APSR_N APSR_Z APSR_C))
+    (def flags'all (bit-or flag'N flag'Z flag'C flag'V))
+    (def flags'NZC (bit-or flag'N flag'Z flag'C))
 
     (def PRIMASK_PM (<< 1 0))
 
     (def CONTROL_NPRIV (<< 1 0))
     (def CONTROL_SPSEL (<< 1 1))
-    (def CONTROL_MASK  (| CONTROL_NPRIV CONTROL_SPSEL))
+    (def CONTROL_MASK  (bit-or CONTROL_NPRIV CONTROL_SPSEL))
 
     (def EXC_RETURN 0xffffffe0)
 
@@ -219,9 +219,9 @@
             ]
                 (aset this i'regfile regfile)
 
-                ;; Fetch SP & boot PC from vector table
+                ;; Fetch SP and boot PC from vector table
                 (aset regfile reg'SP    (cpu''read32 this,    (ram'base ram)))
-                (aset regfile reg'PC (& (cpu''read32 this, (+ (ram'base ram) 4)) (bit-not 1)))
+                (aset regfile reg'PC (bit-and (cpu''read32 this, (+ (ram'base ram) 4)) (bit-not 1)))
 
                 ;; Start in thread mode with main stack selected
                 (aset this i'msp (aget regfile reg'SP))
@@ -232,383 +232,377 @@
     )
 
     (defn #_"void" cpu''write8  [#_"cpu" this, #_"u32" addr, #_"u8"  data] (ram''write8  (aget this i'ram),    addr,              data) nil)
-    (defn #_"void" cpu''write16 [#_"cpu" this, #_"u32" addr, #_"u16" data] (ram''write16 (aget this i'ram), (& addr (bit-not 1)), data) nil)
-    (defn #_"void" cpu''write32 [#_"cpu" this, #_"u32" addr, #_"u32" data] (ram''write32 (aget this i'ram), (& addr (bit-not 3)), data) nil)
+    (defn #_"void" cpu''write16 [#_"cpu" this, #_"u32" addr, #_"u16" data] (ram''write16 (aget this i'ram), (bit-and addr (bit-not 1)), data) nil)
+    (defn #_"void" cpu''write32 [#_"cpu" this, #_"u32" addr, #_"u32" data] (ram''write32 (aget this i'ram), (bit-and addr (bit-not 3)), data) nil)
 
     (defn #_"u8"  cpu''read8  [#_"cpu" this, #_"u32" addr] (ram''read8  (aget this i'ram),    addr))
-    (defn #_"u16" cpu''read16 [#_"cpu" this, #_"u32" addr] (ram''read16 (aget this i'ram), (& addr (bit-not 1))))
-    (defn #_"u32" cpu''read32 [#_"cpu" this, #_"u32" addr] (ram''read32 (aget this i'ram), (& addr (bit-not 3))))
+    (defn #_"u16" cpu''read16 [#_"cpu" this, #_"u32" addr] (ram''read16 (aget this i'ram), (bit-and addr (bit-not 1))))
+    (defn #_"u32" cpu''read32 [#_"cpu" this, #_"u32" addr] (ram''read32 (aget this i'ram), (bit-and addr (bit-not 3))))
 
     (defn #_"cpu" cpu''step [#_"cpu" this]
-        (when (ß ((aget this i'regfile)[reg'PC] & EXC_RETURN) == EXC_RETURN)
-            (ß armv6m_exc_return(this, (aget this i'regfile)[reg'PC]))
+        (let [
+            #_"[u32]" regfile (aget this i'regfile)
+        ]
+            (when (= (bit-and (aget regfile reg'PC) EXC_RETURN) EXC_RETURN)
+                (armv6m_exc_return this, (aget regfile reg'PC))
+            )
+            (let [
+                #_"u16" inst                                 (armv6m_read_inst this,    (aget regfile reg'PC))
+                #_"u16" inst2 (if (armv6m_decode this, inst) (armv6m_read_inst this, (+ (aget regfile reg'PC) 2)) 0)
+            ]
+                (armv6m_execute this, inst, inst2)
+                this
+            )
         )
-
-        (ß #_"u16" inst = armv6m_read_inst(this, (aget this i'regfile)[reg'PC]))
-
-        (ß #_"u16" inst2)
-        (if (ß armv6m_decode(this, inst))
-            (ß inst2 = armv6m_read_inst(this, (aget this i'regfile)[reg'PC] + 2))
-            (ß inst2 = 0)
-        )
-
-        (ß armv6m_execute(this, inst, inst2))
-        this
     )
 
     (defn #_"u16" armv6m_read_inst [#_"cpu" this, #_"u32" addr]
-        (if (ß addr & 0x2)
-            (§ return (cpu''read32(this, addr) >>> 16) & 0xffff)
-            (§ return (cpu''read32(this, addr) >>> 0) & 0xffff)
+        (if (zero? (bit-and addr 0x2))
+            (bit-and (>>> (cpu''read32 this, addr)  0) 0xffff)
+            (bit-and (>>> (cpu''read32 this, addr) 16) 0xffff)
         )
     )
 
     (defn #_"void" armv6m_update_sp [#_"cpu" this, #_"u32" sp]
-        (ß (aget this i'regfile)[reg'SP] = sp)
+        (aset (aget this i'regfile) reg'SP sp)
 
-        (if (ß ((aget this i'control) & CONTROL_SPSEL) && !(aget this i'handler?))
-            (ß (aget this i'psp) = sp)
-            (ß (aget this i'msp) = sp)
+        (if (or (zero? (bit-and (aget this i'control) CONTROL_SPSEL)) (aget this i'handler?))
+            (aset this i'msp sp)
+            (aset this i'psp sp)
         )
         nil
     )
 
     (defn #_"void" armv6m_update_n_z_flags [#_"cpu" this, #_"u32" rd]
         ;; Zero
-        (if (ß rd == 0)
-            (ß (aget this i'apsr) |= APSR_Z)
-            (ß (aget this i'apsr) &= (bit-not APSR_Z))
+        (if (zero? rd)
+            (aset this i'apsr (bit-or (aget this i'apsr)          flag'Z))
+            (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'Z)))
         )
 
         ;; Negative
-        (if (ß rd & 0x80000000)
-            (ß (aget this i'apsr) |= APSR_N)
-            (ß (aget this i'apsr) &= (bit-not APSR_N))
+        (if-not (zero? (bit-and rd 0x80000000))
+            (aset this i'apsr (bit-or (aget this i'apsr)          flag'N))
+            (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'N)))
         )
         nil
     )
 
     (defn #_"u32" armv6m_add_with_carry [#_"cpu" this, #_"u32" rn, #_"u32" rm, #_"u32" carry_in, #_"u32" mask]
-        (ß #_"u32" res = rn + rm + carry_in)
+        (§ ass #_"u32" res (+ rn rm carry_in))
 
         ;; Zero
-        (when (ß mask & APSR_Z)
-            (if (ß (res & 0xffffffff) == 0)
-                (ß (aget this i'apsr) |= APSR_Z)
-                (ß (aget this i'apsr) &= (bit-not APSR_Z))
+        (when-not (zero? (bit-and mask flag'Z))
+            (if (zero? (bit-and res 0xffffffff))
+                (aset this i'apsr (bit-or (aget this i'apsr)          flag'Z))
+                (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'Z)))
             )
         )
 
         ;; Negative
-        (when (ß mask & APSR_N)
-            (if (ß res & 0x80000000)
-                (ß (aget this i'apsr) |= APSR_N)
-                (ß (aget this i'apsr) &= (bit-not APSR_N))
+        (when-not (zero? (bit-and mask flag'N))
+            (if-not (zero? (bit-and res 0x80000000))
+                (aset this i'apsr (bit-or (aget this i'apsr)          flag'N))
+                (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'N)))
             )
         )
 
         ;; Carry
-        (when (ß mask & APSR_C)
-            (ß #_"u64" unsigned_sum = (#_"u64")rn + (#_"u64")rm + carry_in)
-            (if (ß unsigned_sum == (#_"u64")res)
-                (ß (aget this i'apsr) &= (bit-not APSR_C))
-                (ß (aget this i'apsr) |= APSR_C)
+        (when-not (zero? (bit-and mask flag'C))
+            (§ ass #_"u64" unsigned_sum (+ (§ cast #_"u64" rn) (§ cast #_"u64" rm) carry_in))
+            (if (= unsigned_sum (§ cast #_"u64" res))
+                (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'C)))
+                (aset this i'apsr (bit-or (aget this i'apsr)          flag'C))
             )
         )
 
         ;; Overflow
-        (when (ß mask & APSR_V)
-            (ß int64_t signed_sum = (int64_t)(int32_t)rn + (int64_t)(int32_t)rm + carry_in)
-            (if (ß signed_sum == (int64_t)(int32_t)res)
-                (ß (aget this i'apsr) &= (bit-not APSR_V))
-                (ß (aget this i'apsr) |= APSR_V)
+        (when-not (zero? (bit-and mask flag'V))
+            (§ ass #_"s64" signed_sum (+ (§ cast #_"s64" (§ cast #_"s32" rn)) (§ cast #_"s64" (§ cast #_"s32" rm)) carry_in))
+            (if (= signed_sum (§ cast #_"s64" (§ cast #_"s32" res)))
+                (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'V)))
+                (aset this i'apsr (bit-or (aget this i'apsr)          flag'V))
             )
         )
 
-        (§ return (#_"u32")res)
+        (§ cast #_"u32" res)
     )
 
     (defn #_"u32" armv6m_shift_left [#_"cpu" this, #_"u32" val, #_"u32" shift, #_"u32" mask]
-        (ß #_"u64" res = val)
-        (ß res <<= shift)
+        (§ ass #_"u64" res val)
+        (§ ass res (<< res shift))
 
         ;; Carry Out (res[32])
-        (when (ß mask & APSR_C)
-            (if (ß res & ((#_"u64")1 << 32))
-                (ß (aget this i'apsr) |= APSR_C)
-                (ß (aget this i'apsr) &= (bit-not APSR_C))
+        (when-not (zero? (bit-and mask flag'C))
+            (if-not (zero? (bit-and res (<< (§ cast #_"u64" 1) 32)))
+                (aset this i'apsr (bit-or (aget this i'apsr)          flag'C))
+                (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'C)))
             )
         )
 
         ;; Zero
-        (if (ß (res & 0xffffffff) == 0)
-            (ß (aget this i'apsr) |= APSR_Z)
-            (ß (aget this i'apsr) &= (bit-not APSR_Z))
+        (if (zero? (bit-and res 0xffffffff))
+            (aset this i'apsr (bit-or (aget this i'apsr)          flag'Z))
+            (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'Z)))
         )
 
         ;; Negative
-        (if (ß res & 0x80000000)
-            (ß (aget this i'apsr) |= APSR_N)
-            (ß (aget this i'apsr) &= (bit-not APSR_N))
+        (if-not (zero? (bit-and res 0x80000000))
+            (aset this i'apsr (bit-or (aget this i'apsr)          flag'N))
+            (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'N)))
         )
 
-        (§ return (#_"u32")res)
+        (§ cast #_"u32" res)
     )
 
     (defn #_"u32" armv6m_shift_right [#_"cpu" this, #_"u32" val, #_"u32" shift, #_"u32" mask]
-        (ß #_"u32" res = (32 <= shift) ? 0 : val)
+        (§ ass #_"u32" res (if (< shift 32) val 0))
 
         ;; Carry Out (val[shift-1])
-        (when (ß (mask & APSR_C) && (shift > 0))
+        (when (and (not (zero? (bit-and mask flag'C))) (pos? shift))
             ;; Last lost bit shifted right
-            (if (ß (val & (1 << (shift - 1))) && (shift <= 32))
-                (ß (aget this i'apsr) |= APSR_C)
-                (ß (aget this i'apsr) &= (bit-not APSR_C))
+            (if (and (not (zero? (bit-and val (<< 1 (dec shift))))) (<= shift 32))
+                (aset this i'apsr (bit-or (aget this i'apsr)          flag'C))
+                (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'C)))
             )
         )
 
-        (ß res = res >>> shift)
+        (§ ass res (>>> res shift))
 
         ;; Zero
-        (if (ß (res & 0xffffffff) == 0)
-            (ß (aget this i'apsr) |= APSR_Z)
-            (ß (aget this i'apsr) &= (bit-not APSR_Z))
+        (if (zero? (bit-and res 0xffffffff))
+            (aset this i'apsr (bit-or (aget this i'apsr)          flag'Z))
+            (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'Z)))
         )
 
         ;; Negative
-        (if (ß res & 0x80000000)
-            (ß (aget this i'apsr) |= APSR_N)
-            (ß (aget this i'apsr) &= (bit-not APSR_N))
+        (if-not (zero? (bit-and res 0x80000000))
+            (aset this i'apsr (bit-or (aget this i'apsr)          flag'N))
+            (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'N)))
         )
 
-        (§ return res)
+        res
     )
 
     (defn #_"u32" armv6m_arith_shift_right [#_"cpu" this, #_"u32" val, #_"u32" shift, #_"u32" mask]
-        (ß signed #_"s32" res = val)
+        (§ ass #_"s32" res val)
 
         ;; Carry Out (val[shift-1])
-        (when (ß (mask & APSR_C) && (shift > 0))
+        (when (and (not (zero? (bit-and mask flag'C))) (pos? shift))
             ;; Last lost bit shifted right
-            (if (ß val & (1 << (shift - 1)))
-                (ß (aget this i'apsr) |= APSR_C)
-                (ß (aget this i'apsr) &= (bit-not APSR_C))
+            (if-not (zero? (bit-and val (<< 1 (dec shift))))
+                (aset this i'apsr (bit-or (aget this i'apsr)          flag'C))
+                (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'C)))
             )
         )
 
-        (ß res = res >> shift)
+        (§ ass res (>> res shift))
 
         ;; Zero
-        (if (ß (res & 0xffffffff) == 0)
-            (ß (aget this i'apsr) |= APSR_Z)
-            (ß (aget this i'apsr) &= (bit-not APSR_Z))
+        (if (zero? (bit-and res 0xffffffff))
+            (aset this i'apsr (bit-or (aget this i'apsr)          flag'Z))
+            (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'Z)))
         )
 
         ;; Negative
-        (if (ß res & 0x80000000)
-            (ß (aget this i'apsr) |= APSR_N)
-            (ß (aget this i'apsr) &= (bit-not APSR_N))
+        (if-not (zero? (bit-and res 0x80000000))
+            (aset this i'apsr (bit-or (aget this i'apsr)          flag'N))
+            (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'N)))
         )
 
-        (§ return res)
+        res
     )
 
     (defn #_"u32" armv6m_rotate_right [#_"cpu" this, #_"u32" val, #_"u32" shift, #_"u32" mask]
-        (ß #_"u32" res)
+        (§ ass #_"u32" res)
 
-        (if (ß shift == 0)
-            (ß res = val)
+        (if (zero? shift)
+            (§ ass res val)
             (do
-                (ß shift &= 0x1f)
+                (§ ass shift (bit-and shift 0x1f))
 
-                (ß res = val >>> shift)
-                (ß res |= (val << (32 - shift)))
+                (§ ass res (>>> val shift))
+                (§ ass res (bit-or res (<< val (- 32 shift))))
             )
         )
 
         ;; Carry out
-        (if (ß res & 0x80000000)
-            (ß (aget this i'apsr) |= APSR_C)
-            (ß (aget this i'apsr) &= (bit-not APSR_C))
+        (if-not (zero? (bit-and res 0x80000000))
+            (aset this i'apsr (bit-or (aget this i'apsr)          flag'C))
+            (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'C)))
         )
 
         ;; Zero
-        (if (ß (res & 0xffffffff) == 0)
-            (ß (aget this i'apsr) |= APSR_Z)
-            (ß (aget this i'apsr) &= (bit-not APSR_Z))
+        (if (zero? (bit-and res 0xffffffff))
+            (aset this i'apsr (bit-or (aget this i'apsr)          flag'Z))
+            (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'Z)))
         )
 
         ;; Negative
-        (if (ß res & 0x80000000)
-            (ß (aget this i'apsr) |= APSR_N)
-            (ß (aget this i'apsr) &= (bit-not APSR_N))
+        (if-not (zero? (bit-and res 0x80000000))
+            (aset this i'apsr (bit-or (aget this i'apsr)          flag'N))
+            (aset this i'apsr (bit-and (aget this i'apsr) (bit-not flag'N)))
         )
 
-        (§ return res)
+        res
     )
 
     (defn #_"u32" armv6m_sign_extend [#_"cpu" this, #_"u32" val, #_"s32" offset]
-        (if (ß val & (1 << (offset - 1)))
-            (ß val |= (bit-not 0) << offset)
-            (ß val &= (bit-not ((bit-not 0) << offset)))
+        (if-not (zero? (bit-and val (<< 1 (dec offset))))
+            (bit-or  val          (<< (bit-not 0) offset))
+            (bit-and val (bit-not (<< (bit-not 0) offset)))
         )
-
-        (§ return val)
     )
 
     (defn #_"u32" armv6m_exception [#_"cpu" this, #_"u32" pc, #_"u32" exception]
-        (ß #_"u32" sp)
+        (§ ass #_"u32" sp)
 
         ;; Retrieve shadow stack pointer (depending on mode)
-        (if (ß ((aget this i'control) & CONTROL_SPSEL) && !(aget this i'handler?))
-            (ß sp = (aget this i'psp))
-            (ß sp = (aget this i'msp))
+        (if (or (zero? (bit-and (aget this i'control) CONTROL_SPSEL)) (aget this i'handler?))
+            (§ ass sp (aget this i'msp))
+            (§ ass sp (aget this i'psp))
         )
 
         ;; Push frame onto current stack
-        (ß sp = sp - 4)
-        (ß cpu''write32(this, sp, (aget this i'apsr)))
-        (ß sp = sp - 4)
-        (ß cpu''write32(this, sp, (aget this i'regfile)[reg'PC]))
-        (ß sp = sp - 4)
-        (ß cpu''write32(this, sp, (aget this i'regfile)[reg'LR]))
-        (ß sp = sp - 4)
-        (ß cpu''write32(this, sp, (aget this i'regfile)[12]))
-        (ß sp = sp - 4)
-        (ß cpu''write32(this, sp, (aget this i'regfile)[3]))
-        (ß sp = sp - 4)
-        (ß cpu''write32(this, sp, (aget this i'regfile)[2]))
-        (ß sp = sp - 4)
-        (ß cpu''write32(this, sp, (aget this i'regfile)[1]))
-        (ß sp = sp - 4)
-        (ß cpu''write32(this, sp, (aget this i'regfile)[0]))
-        (ß (aget this i'regfile)[reg'SP] = sp)
+        (§ ass sp (- sp 4))
+        (cpu''write32 this, sp, (aget this i'apsr))
+        (§ ass sp (- sp 4))
+        (cpu''write32 this, sp, (aget (aget this i'regfile) reg'PC))
+        (§ ass sp (- sp 4))
+        (cpu''write32 this, sp, (aget (aget this i'regfile) reg'LR))
+        (§ ass sp (- sp 4))
+        (cpu''write32 this, sp, (aget (aget this i'regfile) 12))
+        (§ ass sp (- sp 4))
+        (cpu''write32 this, sp, (aget (aget this i'regfile) 3))
+        (§ ass sp (- sp 4))
+        (cpu''write32 this, sp, (aget (aget this i'regfile) 2))
+        (§ ass sp (- sp 4))
+        (cpu''write32 this, sp, (aget (aget this i'regfile) 1))
+        (§ ass sp (- sp 4))
+        (cpu''write32 this, sp, (aget (aget this i'regfile) 0))
+        (aset (aget this i'regfile) reg'SP sp)
 
         ;; Record exception
-        (ß (aget this i'ipsr) = exception & 0x3f)
+        (aset this i'ipsr (bit-and exception 0x3f))
 
         ;; Fetch exception vector address into PC
-        (ß (aget this i'regfile)[reg'PC] = cpu''read32(this, (ram'base (aget this i'ram)) + (exception * 4)) & (bit-not 1))
+        (aset (aget this i'regfile) reg'PC (bit-and (cpu''read32 this, (+ (ram'base (aget this i'ram)) (* exception 4))) (bit-not 1)))
 
-        (if (ß (aget this i'handler?))
+        (if (aget this i'handler?)
             (do
                 ;; LR = Return to handler mode (recursive interrupt?)
-                (ß (aget this i'regfile)[reg'LR] = 0xfffffff1)
+                (aset (aget this i'regfile) reg'LR 0xfffffff1)
             )
-            (if (ß ((aget this i'control) & CONTROL_SPSEL) == 0)
+            (if (zero? (bit-and (aget this i'control) CONTROL_SPSEL))
                 (do
                     ;; LR = Return to thread mode (with main stack)
-                    (ß (aget this i'regfile)[reg'LR] = 0xfffffff9)
+                    (aset (aget this i'regfile) reg'LR 0xfffffff9)
                 )
                 (do
                     ;; LR = Return to thread mode (with process stack)
-                    (ß (aget this i'regfile)[reg'LR] = 0xfffffffd)
+                    (aset (aget this i'regfile) reg'LR 0xfffffffd)
                 )
             )
         )
 
         ;; Swap to handler mode
-        (ß (aget this i'handler?) = true)
+        (aset this i'handler? true)
 
         ;; Current stack is now main
-        (ß (aget this i'control) &= (bit-not CONTROL_SPSEL))
+        (aset this i'control (bit-and (aget this i'control) (bit-not CONTROL_SPSEL)))
 
-        (§ return (aget this i'regfile)[reg'PC])
+        (aget (aget this i'regfile) reg'PC)
     )
 
     (defn #_"void" armv6m_exc_return [#_"cpu" this, #_"u32" pc]
-        (when (ß !(aget this i'handler?))
-            (§ return nil)
-        )
-
-        (when (ß (pc & EXC_RETURN) == EXC_RETURN)
+        (when (and (aget this i'handler?) (= (bit-and pc EXC_RETURN) EXC_RETURN))
             ;; TODO: Should be 0x1f...
-            (§ switch (pc & 0xf)
+            (§ switch (bit-and pc 0xf)
                 (§ case 0x1)
                 (§
-                    (ß (aget this i'handler?) = true)
-                    (ß (aget this i'control) &= (bit-not CONTROL_SPSEL))
+                    (aset this i'handler? true)
+                    (aset this i'control (bit-and (aget this i'control) (bit-not CONTROL_SPSEL)))
                     (§ break)
                 )
                 (§ case 0x9)
                 (§
-                    (ß (aget this i'handler?) = false)
-                    (ß (aget this i'control) &= (bit-not CONTROL_SPSEL))
+                    (aset this i'handler? false)
+                    (aset this i'control (bit-and (aget this i'control) (bit-not CONTROL_SPSEL)))
                     (§ break)
                 )
                 (§ case 0xd)
                 (§
-                    (ß (aget this i'handler?) = false)
-                    (ß (aget this i'control) |= CONTROL_SPSEL)
+                    (aset this i'handler? false)
+                    (aset this i'control (bit-or (aget this i'control) CONTROL_SPSEL))
                     (§ break)
                 )
                 (§ default)
                 (§
-                    (ß assert(!"Not handled"))
+                    (§ throw "Not handled")
                     (§ break)
                 )
             )
 
-            (ß #_"u32" sp = (aget this i'regfile)[reg'SP])
-            (ß (aget this i'regfile)[0] = cpu''read32(this, sp))
-            (ß sp = sp + 4)
-            (ß (aget this i'regfile)[1] = cpu''read32(this, sp))
-            (ß sp = sp + 4)
-            (ß (aget this i'regfile)[2] = cpu''read32(this, sp))
-            (ß sp = sp + 4)
-            (ß (aget this i'regfile)[3] = cpu''read32(this, sp))
-            (ß sp = sp + 4)
-            (ß (aget this i'regfile)[12] = cpu''read32(this, sp))
-            (ß sp = sp + 4)
-            (ß (aget this i'regfile)[reg'LR] = cpu''read32(this, sp))
-            (ß sp = sp + 4)
-            (ß (aget this i'regfile)[reg'PC] = cpu''read32(this, sp))
-            (ß sp = sp + 4)
-            (ß (aget this i'apsr) = cpu''read32(this, sp))
-            (ß sp = sp + 4)
-            (ß armv6m_update_sp(this, sp))
+            (§ ass #_"u32" sp (aget (aget this i'regfile) reg'SP))
+            (aset (aget this i'regfile) 0 (cpu''read32 this, sp))
+            (§ ass sp (+ sp 4))
+            (aset (aget this i'regfile) 1 (cpu''read32 this, sp))
+            (§ ass sp (+ sp 4))
+            (aset (aget this i'regfile) 2 (cpu''read32 this, sp))
+            (§ ass sp (+ sp 4))
+            (aset (aget this i'regfile) 3 (cpu''read32 this, sp))
+            (§ ass sp (+ sp 4))
+            (aset (aget this i'regfile) 12 (cpu''read32 this, sp))
+            (§ ass sp (+ sp 4))
+            (aset (aget this i'regfile) reg'LR (cpu''read32 this, sp))
+            (§ ass sp (+ sp 4))
+            (aset (aget this i'regfile) reg'PC (cpu''read32 this, sp))
+            (§ ass sp (+ sp 4))
+            (aset this i'apsr (cpu''read32 this, sp))
+            (§ ass sp (+ sp 4))
+            (armv6m_update_sp this, sp)
         )
         nil
     )
 
     (defn #_"bool" armv6m_decode [#_"cpu" this, #_"u16" inst]
-        (ß #_"bool" res = false)
-        (ß #_"bool" v_decoded = false)
+        (§ ass #_"bool" res false)
+        (§ ass #_"bool" decoded? false)
 
-        (ß (aget this i'rd) = 0)
-        (ß (aget this i'rt) = 0)
-        (ß (aget this i'rm) = 0)
-        (ß (aget this i'rn) = 0)
-        (ß (aget this i'imm) = 0)
-        (ß (aget this i'cond) = 0)
-        (ß (aget this i'reglist) = 0)
+        (aset this i'rd 0)
+        (aset this i'rt 0)
+        (aset this i'rm 0)
+        (aset this i'rn 0)
+        (aset this i'imm 0)
+        (aset this i'cond 0)
+        (aset this i'reglist 0)
 
         ;; Group 0?
-        (when (ß !v_decoded)
-            (ß v_decoded = true)
-            (ß (aget this i'inst_group) = code'IGRP0)
-            (§ switch (inst & mask'IGRP0)
+        (when-not decoded?
+            (§ ass decoded? true)
+            (aset this i'inst_group code'IGRP0)
+            (§ switch (bit-and inst mask'IGRP0)
                 #_"BCC <label>"
                 #_"1 1 0 1 cond imm8"
                 (§ case code'BCC)
                 (§
-                    (ß (aget this i'cond) = (inst >>> 8) & 0x0f)
-                    (ß (aget this i'imm) = (inst >>> 0) & 0xff)
+                    (aset this i'cond (bit-and (>>> inst 8) 0x0f))
+                    (aset this i'imm (bit-and (>>> inst 0) 0xff))
                     (§ break)
                 )
                 (§ default)
                 (§
-                    (ß v_decoded = false)
+                    (§ ass decoded? false)
                     (§ break)
                 )
             )
         )
 
         ;; Group 1?
-        (when (ß !v_decoded)
-            (ß v_decoded = true)
-            (ß (aget this i'inst_group) = code'IGRP1)
-            (§ switch (inst & mask'IGRP1)
+        (when-not decoded?
+            (§ ass decoded? true)
+            (aset this i'inst_group code'IGRP1)
+            (§ switch (bit-and inst mask'IGRP1)
                 #_"ADDS <Rdn>,#<imm8>"
                 #_"0 0 1 1 0 Rdn imm8"
                 (§ case code'ADDS_1)
@@ -616,9 +610,9 @@
                 #_"0 0 1 11 Rdn imm8"
                 (§ case code'SUBS_1)
                 (§
-                    (ß (aget this i'rd) = (inst >>> 8) & 0x7)
-                    (ß (aget this i'rn) = (aget this i'rd))
-                    (ß (aget this i'imm) = (inst >>> 0) & 0xff)
+                    (aset this i'rd (bit-and (>>> inst 8) 0x7))
+                    (aset this i'rn (aget this i'rd))
+                    (aset this i'imm (bit-and (>>> inst 0) 0xff))
                     (§ break)
                 )
 
@@ -629,8 +623,8 @@
                 #_"0 0 1 0 0 Rd imm8"
                 (§ case code'MOVS)
                 (§
-                    (ß (aget this i'rd) = (inst >>> 8) & 0x7)
-                    (ß (aget this i'imm) = (inst >>> 0) & 0xff)
+                    (aset this i'rd (bit-and (>>> inst 8) 0x7))
+                    (aset this i'imm (bit-and (>>> inst 0) 0xff))
                     (§ break)
                 )
 
@@ -644,9 +638,9 @@
                 #_"0 0 0 0 1 imm5 Rm Rd"
                 (§ case code'LSRS)
                 (§
-                    (ß (aget this i'imm) = (inst >>> 6) & 0x1f)
-                    (ß (aget this i'rm) = (inst >>> 3) & 0x7)
-                    (ß (aget this i'rd) = (inst >>> 0) & 0x7)
+                    (aset this i'imm (bit-and (>>> inst 6) 0x1f))
+                    (aset this i'rm (bit-and (>>> inst 3) 0x7))
+                    (aset this i'rd (bit-and (>>> inst 0) 0x7))
                     (§ break)
                 )
 
@@ -654,7 +648,7 @@
                 #_"1 1 1 0 0 imm11"
                 (§ case code'B)
                 (§
-                    (ß (aget this i'imm) = (inst >>> 0) & 0x7ff)
+                    (aset this i'imm (bit-and (>>> inst 0) 0x7ff))
                     (§ break)
                 )
 
@@ -663,14 +657,14 @@
                 (§ case code'BL)
                 (§
                     ;; 32-bit instruction
-                    (ß res = true)
-                    (ß (aget this i'imm) = (inst >>> 0) & 0x7ff)
-                    (ß (aget this i'rd) = reg'LR)
+                    (§ ass res true)
+                    (aset this i'imm (bit-and (>>> inst 0) 0x7ff))
+                    (aset this i'rd reg'LR)
 
                     ;; TODO: Clean this up
                     ;; Check next instruction to work out if this is a BL or MSR
-                    (when (ß (armv6m_read_inst(this, (aget this i'regfile)[reg'PC] + 2) & 0xc000) != 0xc000)
-                        (ß v_decoded = false)
+                    (when-not (= (bit-and (armv6m_read_inst this, (+ (aget (aget this i'regfile) reg'PC) 2)) 0xc000) 0xc000)
+                        (§ ass decoded? false)
                     )
                     (§ break)
                 )
@@ -679,8 +673,8 @@
                 #_"0 0 1 0 1 Rn imm8"
                 (§ case code'CMP)
                 (§
-                    (ß (aget this i'rn) = (inst >>> 8) & 0x7)
-                    (ß (aget this i'imm) = (inst >>> 0) & 0xff)
+                    (aset this i'rn (bit-and (>>> inst 8) 0x7))
+                    (aset this i'imm (bit-and (>>> inst 0) 0xff))
                     (§ break)
                 )
 
@@ -688,15 +682,15 @@
                 #_"1 1 0 0 1 Rn register_list"
                 #_"LDM <Rn>,<registers> <Rn> included in <registers>"
                 #_"1 1 0 0 1 Rn register_list"
-             ;; case code'LDM_1:
+             ;; (§ case code'LDM_1)
                 (§ case code'LDM)
                 #_"STM <Rn>!,<registers>"
                 #_"1 1 0 0 0 Rn register_list"
                 (§ case code'STM)
                 (§
-                    (ß (aget this i'rn) = (inst >>> 8) & 0x7)
-                    (ß (aget this i'rd) = (aget this i'rn))
-                    (ß (aget this i'reglist) = (inst >>> 0) & 0xff)
+                    (aset this i'rn (bit-and (>>> inst 8) 0x7))
+                    (aset this i'rd (aget this i'rn))
+                    (aset this i'reglist (bit-and (>>> inst 0) 0xff))
                     (§ break)
                 )
 
@@ -719,10 +713,10 @@
                 #_"1 0 0 0 0 imm5 Rn Rt"
                 (§ case code'STRH)
                 (§
-                    (ß (aget this i'imm) = (inst >>> 6) & 0x1f)
-                    (ß (aget this i'rn) = (inst >>> 3) & 0x7)
-                    (ß (aget this i'rt) = (inst >>> 0) & 0x7)
-                    (ß (aget this i'rd) = (aget this i'rt))
+                    (aset this i'imm (bit-and (>>> inst 6) 0x1f))
+                    (aset this i'rn (bit-and (>>> inst 3) 0x7))
+                    (aset this i'rt (bit-and (>>> inst 0) 0x7))
+                    (aset this i'rd (aget this i'rt))
                     (§ break)
                 )
 
@@ -730,9 +724,9 @@
                 #_"0 1 0 0 1 Rt imm8"
                 (§ case code'LDR_2)
                 (§
-                    (ß (aget this i'rt) = (inst >>> 8) & 0x7)
-                    (ß (aget this i'rd) = (aget this i'rt))
-                    (ß (aget this i'imm) = (inst >>> 0) & 0xff)
+                    (aset this i'rt (bit-and (>>> inst 8) 0x7))
+                    (aset this i'rd (aget this i'rt))
+                    (aset this i'imm (bit-and (>>> inst 0) 0xff))
                     (§ break)
                 )
 
@@ -746,26 +740,26 @@
                 #_"1 0 1 0 1 Rd imm8"
                 (§ case code'ADD_1)
                 (§
-                    (ß (aget this i'rt) = (inst >>> 8) & 0x7)
-                    (ß (aget this i'rn) = reg'SP)
-                    (ß (aget this i'rd) = (aget this i'rt))
-                    (ß (aget this i'imm) = (inst >>> 0) & 0xff)
+                    (aset this i'rt (bit-and (>>> inst 8) 0x7))
+                    (aset this i'rn reg'SP)
+                    (aset this i'rd (aget this i'rt))
+                    (aset this i'imm (bit-and (>>> inst 0) 0xff))
                     (§ break)
                 )
 
                 (§ default)
                 (§
-                    (ß v_decoded = false)
+                    (§ ass decoded? false)
                     (§ break)
                 )
             )
         )
 
         ;; Group 2?
-        (when (ß !v_decoded)
-            (ß v_decoded = true)
-            (ß (aget this i'inst_group) = code'IGRP2)
-            (§ switch (inst & mask'IGRP2)
+        (when-not decoded?
+            (§ ass decoded? true)
+            (aset this i'inst_group code'IGRP2)
+            (§ switch (bit-and inst mask'IGRP2)
                 #_"ADDS <Rd>,<Rn>,#<imm3>"
                 #_"0 0 0 1 1 1 0 imm3 Rn Rd"
                 (§ case code'ADDS)
@@ -773,9 +767,9 @@
                 #_"0 0 0 11 1 1 imm3 Rn Rd"
                 (§ case code'SUBS)
                 (§
-                    (ß (aget this i'imm) = (inst >>> 6) & 0x7)
-                    (ß (aget this i'rn) = (inst >>> 3) & 0x7)
-                    (ß (aget this i'rd) = (inst >>> 0) & 0x7)
+                    (aset this i'imm (bit-and (>>> inst 6) 0x7))
+                    (aset this i'rn (bit-and (>>> inst 3) 0x7))
+                    (aset this i'rd (bit-and (>>> inst 0) 0x7))
                     (§ break)
                 )
 
@@ -786,9 +780,9 @@
                 #_"0 0 0 11 0 1 Rm Rn Rd"
                 (§ case code'SUBS_2)
                 (§
-                    (ß (aget this i'rm) = (inst >>> 6) & 0x7)
-                    (ß (aget this i'rn) = (inst >>> 3) & 0x7)
-                    (ß (aget this i'rd) = (inst >>> 0) & 0x7)
+                    (aset this i'rm (bit-and (>>> inst 6) 0x7))
+                    (aset this i'rn (bit-and (>>> inst 3) 0x7))
+                    (aset this i'rd (bit-and (>>> inst 0) 0x7))
                     (§ break)
                 )
 
@@ -817,10 +811,10 @@
                 #_"0 1 0 1 0 0 1 Rm Rn Rt"
                 (§ case code'STRH_1)
                 (§
-                    (ß (aget this i'rm) = (inst >>> 6) & 0x7)
-                    (ß (aget this i'rn) = (inst >>> 3) & 0x7)
-                    (ß (aget this i'rt) = (inst >>> 0) & 0x7)
-                    (ß (aget this i'rd) = (aget this i'rt))
+                    (aset this i'rm (bit-and (>>> inst 6) 0x7))
+                    (aset this i'rn (bit-and (>>> inst 3) 0x7))
+                    (aset this i'rt (bit-and (>>> inst 0) 0x7))
+                    (aset this i'rd (aget this i'rt))
                     (§ break)
                 )
 
@@ -828,9 +822,9 @@
                 #_"1 0 1 1 1 1 0 P register_list"
                 (§ case code'POP)
                 (§
-                    (ß (aget this i'reglist) = (inst >>> 0) & 0xff)
-                    (when (ß inst & (1 << 8))
-                        (ß (aget this i'reglist) |= (1 << reg'PC))
+                    (aset this i'reglist (bit-and (>>> inst 0) 0xff))
+                    (when-not (zero? (bit-and inst (<< 1 8)))
+                        (aset this i'reglist (bit-or (aget this i'reglist) (<< 1 reg'PC)))
                     )
                     (§ break)
                 )
@@ -839,34 +833,34 @@
                 #_"1 0 1 1 0 1 0 M register_list"
                 (§ case code'PUSH)
                 (§
-                    (ß (aget this i'reglist) = (inst >>> 0) & 0xff)
-                    (when (ß inst & (1 << 8))
-                        (ß (aget this i'reglist) |= (1 << reg'LR))
+                    (aset this i'reglist (bit-and (>>> inst 0) 0xff))
+                    (when-not (zero? (bit-and inst (<< 1 8)))
+                        (aset this i'reglist (bit-or (aget this i'reglist) (<< 1 reg'LR)))
                     )
                     (§ break)
                 )
 
                 (§ default)
                 (§
-                    (ß v_decoded = false)
+                    (§ ass decoded? false)
                     (§ break)
                 )
             )
         )
 
         ;; Group 3?
-        (when (ß !v_decoded)
-            (ß v_decoded = true)
-            (ß (aget this i'inst_group) = code'IGRP3)
-            (§ switch (inst & mask'IGRP3)
+        (when-not decoded?
+            (§ ass decoded? true)
+            (aset this i'inst_group code'IGRP3)
+            (§ switch (bit-and inst mask'IGRP3)
                 #_"ADD <Rdn>,<Rm>"
                 #_"0 1 0 0 0 1 0 0 Rm Rdn"
                 (§ case code'ADD)
                 (§
-                    (ß (aget this i'rm) = (inst >>> 3) & 0xf)
-                    (ß (aget this i'rd) = (inst >>> 0) & 0x7)
-                    (ß (aget this i'rd) |= (inst >>> 4) & 0x8)
-                    (ß (aget this i'rn) = (aget this i'rd))
+                    (aset this i'rm (bit-and (>>> inst 3) 0xf))
+                    (aset this i'rd (bit-and (>>> inst 0) 0x7))
+                    (aset this i'rd (bit-or (aget this i'rd) (bit-and (>>> inst 4) 0x8)))
+                    (aset this i'rn (aget this i'rd))
                     (§ break)
                 )
 
@@ -880,7 +874,7 @@
                 #_"1 1 0 1 1 1 1 0 imm8"
                 (§ case code'UDF)
                 (§
-                    (ß (aget this i'imm) = (inst >>> 0) & 0xff)
+                    (aset this i'imm (bit-and (>>> inst 0) 0xff))
                     (§ break)
                 )
 
@@ -888,9 +882,9 @@
                 #_"0 1 0 0 0 1 0 1 N Rm Rn"
                 (§ case code'CMP_2)
                 (§
-                    (ß (aget this i'rm) = (inst >>> 3) & 0xf)
-                    (ß (aget this i'rn) = (inst >>> 0) & 0x7)
-                    (ß (aget this i'rn) |= (inst >>> 4) & 0x8)
+                    (aset this i'rm (bit-and (>>> inst 3) 0xf))
+                    (aset this i'rn (bit-and (>>> inst 0) 0x7))
+                    (aset this i'rn (bit-or (aget this i'rn) (bit-and (>>> inst 4) 0x8)))
                     (§ break)
                 )
 
@@ -898,25 +892,25 @@
                 #_"0 1 0 0 0 1 1 0 D Rm Rd"
                 (§ case code'MOV)
                 (§
-                    (ß (aget this i'rm) = (inst >>> 3) & 0xf)
-                    (ß (aget this i'rd) = (inst >>> 0) & 0x7)
-                    (ß (aget this i'rd) |= (inst >>> 4) & 0x8)
+                    (aset this i'rm (bit-and (>>> inst 3) 0xf))
+                    (aset this i'rd (bit-and (>>> inst 0) 0x7))
+                    (aset this i'rd (bit-or (aget this i'rd) (bit-and (>>> inst 4) 0x8)))
                     (§ break)
                 )
 
                 (§ default)
                 (§
-                    (ß v_decoded = false)
+                    (§ ass decoded? false)
                     (§ break)
                 )
             )
         )
 
         ;; Group 4?
-        (when (ß !v_decoded)
-            (ß v_decoded = true)
-            (ß (aget this i'inst_group) = code'IGRP4)
-            (§ switch (inst & mask'IGRP4)
+        (when-not decoded?
+            (§ ass decoded? true)
+            (aset this i'inst_group code'IGRP4)
+            (§ switch (bit-and inst mask'IGRP4)
                 #_"ADD SP,SP,#<imm7>"
                 #_"1 0 1 1 0 0 0 0 0 imm7"
                 (§ case code'ADD_2)
@@ -924,9 +918,9 @@
                 #_"1 0 1 1 000 0 1 imm7"
                 (§ case code'SUB)
                 (§
-                    (ß (aget this i'rn) = reg'SP)
-                    (ß (aget this i'rd) = reg'SP)
-                    (ß (aget this i'imm) = (inst >>> 0) & 0x7f)
+                    (aset this i'rn reg'SP)
+                    (aset this i'rd reg'SP)
+                    (aset this i'imm (bit-and (>>> inst 0) 0x7f))
                     (§ break)
                 )
 
@@ -934,8 +928,8 @@
                 #_"0 1 0 0 0 1 1 1 1 Rm (0) (0) (0)"
                 (§ case code'BLX)
                 (§
-                    (ß (aget this i'rm) = (inst >>> 3) & 0xf)
-                    (ß (aget this i'rd) = reg'LR)
+                    (aset this i'rm (bit-and (>>> inst 3) 0xf))
+                    (aset this i'rd reg'LR)
                     (§ break)
                 )
 
@@ -943,23 +937,23 @@
                 #_"0 1 0 0 0 1 1 1 0 Rm (0) (0) (0)"
                 (§ case code'BX)
                 (§
-                    (ß (aget this i'rm) = (inst >>> 3) & 0xf)
+                    (aset this i'rm (bit-and (>>> inst 3) 0xf))
                     (§ break)
                 )
 
                 (§ default)
                 (§
-                    (ß v_decoded = false)
+                    (§ ass decoded? false)
                     (§ break)
                 )
             )
         )
 
         ;; Group 5?
-        (when (ß !v_decoded)
-            (ß v_decoded = true)
-            (ß (aget this i'inst_group) = code'IGRP5)
-            (§ switch (inst & mask'IGRP5)
+        (when-not decoded?
+            (§ ass decoded? true)
+            (aset this i'inst_group code'IGRP5)
+            (§ switch (bit-and inst mask'IGRP5)
                 #_"ADCS <Rdn>,<Rm>"
                 #_"0 1 0 0 0 0 0 1 0 1 Rm Rdn"
                 (§ case code'ADCS)
@@ -991,9 +985,9 @@
                 #_"0 1 0 0 0 0 0 1 1 0 Rm Rdn"
                 (§ case code'SBCS)
                 (§
-                    (ß (aget this i'rm) = (inst >>> 3) & 0x7)
-                    (ß (aget this i'rd) = (inst >>> 0) & 0x7)
-                    (ß (aget this i'rn) = (aget this i'rd))
+                    (aset this i'rm (bit-and (>>> inst 3) 0x7))
+                    (aset this i'rd (bit-and (>>> inst 0) 0x7))
+                    (aset this i'rn (aget this i'rd))
                     (§ break)
                 )
 
@@ -1007,8 +1001,8 @@
                 #_"000 1 0 0 1 0 0 0 Rm Rn"
                 (§ case code'TST)
                 (§
-                    (ß (aget this i'rm) = (inst >>> 3) & 0x7)
-                    (ß (aget this i'rn) = (inst >>> 0) & 0x7)
+                    (aset this i'rm (bit-and (>>> inst 3) 0x7))
+                    (aset this i'rn (bit-and (>>> inst 0) 0x7))
                     (§ break)
                 )
 
@@ -1016,9 +1010,9 @@
                 #_"0 1 0 0 0 0 1 1 0 1 Rn Rdm"
                 (§ case code'MULS)
                 (§
-                    (ß (aget this i'rn) = (inst >>> 3) & 0x7)
-                    (ß (aget this i'rd) = (inst >>> 0) & 0x7)
-                    (ß (aget this i'rm) = (aget this i'rd))
+                    (aset this i'rn (bit-and (>>> inst 3) 0x7))
+                    (aset this i'rd (bit-and (>>> inst 0) 0x7))
+                    (aset this i'rm (aget this i'rd))
                     (§ break)
                 )
 
@@ -1047,8 +1041,8 @@
                 #_"1 0 1 1 100 0 1 0 Rm Rd"
                 (§ case code'UXTH)
                 (§
-                    (ß (aget this i'rm) = (inst >>> 3) & 0x7)
-                    (ß (aget this i'rd) = (inst >>> 0) & 0x7)
+                    (aset this i'rm (bit-and (>>> inst 3) 0x7))
+                    (aset this i'rd (bit-and (>>> inst 0) 0x7))
                     (§ break)
                 )
 
@@ -1056,75 +1050,75 @@
                 #_"0 1 0 0 0 0 1 0 0 1 Rn Rd"
                 (§ case code'RSBS)
                 (§
-                    (ß (aget this i'rn) = (inst >>> 3) & 0x7)
-                    (ß (aget this i'rd) = (inst >>> 0) & 0x7)
+                    (aset this i'rn (bit-and (>>> inst 3) 0x7))
+                    (aset this i'rd (bit-and (>>> inst 0) 0x7))
                     (§ break)
                 )
 
                 (§ default)
                 (§
-                    (ß v_decoded = false)
+                    (§ ass decoded? false)
                     (§ break)
                 )
             )
         )
 
         ;; Group 6?
-        (when (ß !v_decoded)
-            (ß v_decoded = true)
-            (ß (aget this i'inst_group) = code'IGRP6)
-            (§ switch (inst & mask'IGRP6)
+        (when-not decoded?
+            (§ ass decoded? true)
+            (aset this i'inst_group code'IGRP6)
+            (§ switch (bit-and inst mask'IGRP6)
                 #_"MRS <Rd>,<spec_reg>"
                 #_"1 1 1 01 0 1 1 1 1 1 (0) (1) (1) (1) (1) 1 0 (0) 0 Rd SYSm"
                 (§ case code'MRS)
                 (§
                     ;; 32-bit instruction
-                    (ß res = true)
+                    (§ ass res true)
                     (§ break)
                 )
                 #_"MSR <spec_reg>,<Rn>"
                 #_"1 1 1 01 0 1 1 1 0 0 (0) Rn 1 0 (0) 0 (1) (0) (0) (0) SYSm"
                 (§ case code'MSR)
                 (§
-                    (ß (aget this i'rn) = (inst >>> 0) & 0xf)
+                    (aset this i'rn (bit-and (>>> inst 0) 0xf))
 
                     ;; 32-bit instruction
-                    (ß res = true)
+                    (§ ass res true)
                     (§ break)
                 )
                 #_"CPS<effect> i"
                 #_"1 0 1 1 0 1 1 0 0 1 1 im (0) (0) (1) (0)"
                 (§ case code'CPS)
                 (§
-                    (ß (aget this i'imm) = (inst >>> 4) & 0x1)
+                    (aset this i'imm (bit-and (>>> inst 4) 0x1))
                     (§ break)
                 )
 
                 (§ default)
                 (§
-                    (ß v_decoded = false)
+                    (§ ass decoded? false)
                     (§ break)
                 )
             )
         )
 
         ;; Group 7?
-        (when (ß !v_decoded)
-            (ß v_decoded = true)
-            (ß (aget this i'inst_group) = code'IGRP7)
-            (§ switch (inst & mask'IGRP7)
+        (when-not decoded?
+            (§ ass decoded? true)
+            (aset this i'inst_group code'IGRP7)
+            (§ switch (bit-and inst mask'IGRP7)
                 #_"DMB #<option>"
                 #_"1 1 1 01 0 1 1 1 0 1 1 (1) (1) (1) (1) 1 0 (0) 0 (1) (1) (1) (1) 0 1 0 1 option"
-             ;; case code'DMB:
+             ;; (§ case code'DMB)
                 #_"DSB #<option>"
                 #_"1 1 1 01 0 1 1 1 0 1 1 (1) (1) (1) (1) 1 0 (0) 0 (1) (1) (1) (1) 0 1 0 0 option"
-             ;; case code'DSB:
+             ;; (§ case code'DSB)
                 #_"ISB #<option>"
                 #_"1 1 1 01 0 1 1 1 0 1 1 (1) (1) (1) (1) 1 0 (0) 0 (1) (1) (1) (1) 0 1 1 0 option"
                 (§ case code'ISB)
                 (§
                     ;; 32-bit instruction
-                    (ß res = true)
+                    (§ ass res true)
 
                     ;; Do nothing
                     (§ break)
@@ -1134,7 +1128,7 @@
                 (§ case code'UDF_W)
                 (§
                     ;; 32-bit instruction
-                    (ß res = true)
+                    (§ ass res true)
 
                     ;; Do nothing
                     (§ break)
@@ -1142,17 +1136,17 @@
 
                 (§ default)
                 (§
-                    (ß v_decoded = false)
+                    (§ ass decoded? false)
                     (§ break)
                 )
             )
         )
 
         ;; Group 8?
-        (when (ß !v_decoded)
-            (ß v_decoded = true)
-            (ß (aget this i'inst_group) = code'IGRP8)
-            (§ switch (inst & mask'IGRP8)
+        (when-not decoded?
+            (§ ass decoded? true)
+            (aset this i'inst_group code'IGRP8)
+            (§ switch (bit-and inst mask'IGRP8)
                 #_"NOP"
                 #_"1 0 1 1 1 1 1 1 0 0 0 0 0 0 0 0"
                 (§ case code'NOP)
@@ -1179,7 +1173,6 @@
                 (§ case code'WFI)
                 (§
                     ;; Do nothing
-                    (ß assert(0))
                     (§ break)
                 )
                 #_"YIELD"
@@ -1187,164 +1180,163 @@
                 (§ case code'YIELD)
                 (§
                     ;; Do nothing
-                    (ß assert(0))
                     (§ break)
                 )
 
                 (§ default)
                 (§
-                    (ß v_decoded = false)
+                    (§ ass decoded? false)
                     (§ break)
                 )
             )
         )
 
-        (when (ß !v_decoded)
-            (ß assert(!"Instruction decode failed"))
+        (when-not decoded?
+            (§ throw "Instruction decode failed")
         )
 
-        (§ return res)
+        res
     )
 
     (defn #_"void" armv6m_execute [#_"cpu" this, #_"u16" inst, #_"u16" inst2]
-        (ß #_"u32" reg_rm = (aget this i'regfile)[(aget this i'rm)])
-        (ß #_"u32" reg_rn = (aget this i'regfile)[(aget this i'rn)])
-        (ß #_"u32" reg_rd = 0)
-        (ß #_"u32" pc = (aget this i'regfile)[reg'PC])
-        (ß #_"u32" offset = 0)
-        (ß #_"bool" write_rd = false)
+        (§ ass #_"u32" reg_rm (aget (aget this i'regfile) (aget this i'rm)))
+        (§ ass #_"u32" reg_rn (aget (aget this i'regfile) (aget this i'rn)))
+        (§ ass #_"u32" reg_rd 0)
+        (§ ass #_"u32" pc (aget (aget this i'regfile) reg'PC))
+        (§ ass #_"u32" offset 0)
+        (§ ass #_"bool" write_rd false)
 
-        (ß pc = pc + 2)
+        (§ ass pc (+ pc 2))
 
         (§ switch ((aget this i'inst_group))
             (§ case code'IGRP0)
             (§
-                (§ switch (inst & mask'IGRP0)
+                (§ switch (bit-and inst mask'IGRP0)
                     #_"BCC <label>"
                     #_"1 1 0 1 cond imm8"
                     (§ case code'BCC)
                     (§
                         ;; Sign extend offset
-                        (ß offset = armv6m_sign_extend(this, (aget this i'imm), 8))
+                        (§ ass offset (armv6m_sign_extend this, (aget this i'imm), 8))
 
                         ;; Convert to words
-                        (ß offset = offset << 1)
+                        (§ ass offset (<< offset 1))
 
                         ;; Make relative to PC + 4
-                        (ß offset = offset + pc + 2)
+                        (§ ass offset (+ offset pc 2))
 
                         (§ switch ((aget this i'cond))
                             (§ case 0) #_"EQ"
                             (§
-                                (when (ß (aget this i'apsr) & APSR_Z)
-                                    (ß pc = offset)
+                                (when-not (zero? (bit-and (aget this i'apsr) flag'Z))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 1) #_"NE"
                             (§
-                                (when (ß ((aget this i'apsr) & APSR_Z) == 0)
-                                    (ß pc = offset)
+                                (when (zero? (bit-and (aget this i'apsr) flag'Z))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 2) #_"CS/HS"
                             (§
-                                (when (ß (aget this i'apsr) & APSR_C)
-                                    (ß pc = offset)
+                                (when-not (zero? (bit-and (aget this i'apsr) flag'C))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 3) #_"CC/LO"
                             (§
-                                (when (ß ((aget this i'apsr) & APSR_C) == 0)
-                                    (ß pc = offset)
+                                (when (zero? (bit-and (aget this i'apsr) flag'C))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 4) #_"MI"
                             (§
-                                (when (ß (aget this i'apsr) & APSR_N)
-                                    (ß pc = offset)
+                                (when-not (zero? (bit-and (aget this i'apsr) flag'N))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 5) #_"PL"
                             (§
-                                (when (ß ((aget this i'apsr) & APSR_N) == 0)
-                                    (ß pc = offset)
+                                (when (zero? (bit-and (aget this i'apsr) flag'N))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 6) #_"VS"
                             (§
-                                (when (ß (aget this i'apsr) & APSR_V)
-                                    (ß pc = offset)
+                                (when-not (zero? (bit-and (aget this i'apsr) flag'V))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 7) #_"VC"
                             (§
-                                (when (ß ((aget this i'apsr) & APSR_V) == 0)
-                                    (ß pc = offset)
+                                (when (zero? (bit-and (aget this i'apsr) flag'V))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 8) #_"HI"
                             (§
-                                (when (ß ((aget this i'apsr) & APSR_C) && (((aget this i'apsr) & APSR_Z) == 0))
-                                    (ß pc = offset)
+                                (when (and (not (zero? (bit-and (aget this i'apsr) flag'C))) (zero? (bit-and (aget this i'apsr) flag'Z)))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 9) #_"LS"
                             (§
-                                (when (ß (((aget this i'apsr) & APSR_C) == 0) || ((aget this i'apsr) & APSR_Z))
-                                    (ß pc = offset)
+                                (when (or (zero? (bit-and (aget this i'apsr) flag'C)) (not (zero? (bit-and (aget this i'apsr) flag'Z))))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 10) #_"GE"
                             (§
-                                (when (ß (((aget this i'apsr) & APSR_N) >>> shift'APSR_N) == (((aget this i'apsr) & APSR_V) >>> shift'APSR_V))
-                                    (ß pc = offset)
+                                (when (= (>>> (bit-and (aget this i'apsr) flag'N) shift'N) (>>> (bit-and (aget this i'apsr) flag'V) shift'V))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 11) #_"LT"
                             (§
-                                (when (ß (((aget this i'apsr) & APSR_N) >>> shift'APSR_N) != (((aget this i'apsr) & APSR_V) >>> shift'APSR_V))
-                                    (ß pc = offset)
+                                (when-not (= (>>> (bit-and (aget this i'apsr) flag'N) shift'N) (>>> (bit-and (aget this i'apsr) flag'V) shift'V))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 12) #_"GT"
                             (§
-                                (when (ß (((aget this i'apsr) & APSR_Z) == 0) && ((((aget this i'apsr) & APSR_N) >>> shift'APSR_N) == (((aget this i'apsr) & APSR_V) >>> shift'APSR_V)))
-                                    (ß pc = offset)
+                                (when (and (zero? (bit-and (aget this i'apsr) flag'Z)) (= (>>> (bit-and (aget this i'apsr) flag'N) shift'N) (>>> (bit-and (aget this i'apsr) flag'V) shift'V)))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 13) #_"LE"
                             (§
-                                (when (ß ((aget this i'apsr) & APSR_Z) || ((((aget this i'apsr) & APSR_N) >>> shift'APSR_N) != (((aget this i'apsr) & APSR_V) >>> shift'APSR_V)))
-                                    (ß pc = offset)
+                                (when (or (not (zero? (bit-and (aget this i'apsr) flag'Z))) (not (= (>>> (bit-and (aget this i'apsr) flag'N) shift'N) (>>> (bit-and (aget this i'apsr) flag'V) shift'V))))
+                                    (§ ass pc offset)
                                 )
                                 (§ break)
                             )
                             (§ case 14) #_"AL"
                             (§
-                                (ß pc = offset)
+                                (§ ass pc offset)
                                 (§ break)
                             )
                             (§ case 15) #_"SVC"
                             (§
-                                (ß pc = armv6m_exception(this, pc, 11))
+                                (§ ass pc (armv6m_exception this, pc, 11))
                                 (§ break)
                             )
                             (§ default)
                             (§
-                                (ß assert(!"Bad condition code"))
+                                (§ throw "Bad condition code")
                                 (§ break)
                             )
                         )
@@ -1355,41 +1347,41 @@
             )
             (§ case code'IGRP1)
             (§
-                (§ switch (inst & mask'IGRP1)
+                (§ switch (bit-and inst mask'IGRP1)
                     #_"ADDS <Rdn>,#<imm8>"
                     #_"0 0 1 1 0 Rdn imm8"
                     (§ case code'ADDS_1)
                     (§
-                        (ß reg_rd = armv6m_add_with_carry(this, reg_rn, (aget this i'imm), 0, ALL_FLAGS))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_add_with_carry this, reg_rn, (aget this i'imm), 0, flags'all))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"ADD <Rd>,SP,#<imm8>"
                     #_"1 0 1 0 1 Rd imm8"
                     (§ case code'ADD_1)
                     (§
-                        (ß reg_rd = reg_rn + ((aget this i'imm) << 2))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (+ reg_rn (<< (aget this i'imm) 2)))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"ADR <Rd>,<label>"
                     #_"1 0 1 0 0 Rd imm8"
                     (§ case code'ADR)
                     (§
-                        (ß reg_rd = pc + (aget this i'imm) + 2)
-                        (ß write_rd = true)
+                        (§ ass reg_rd (+ pc (aget this i'imm) 2))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"ASRS <Rd>,<Rm>,#<imm5>"
                     #_"0 0 0 1 0 imm5 Rm Rd"
                     (§ case code'ASRS)
                     (§
-                        (when (ß (aget this i'imm) == 0)
-                            (ß (aget this i'imm) = 32)
+                        (when (zero? (aget this i'imm))
+                            (aset this i'imm 32)
                         )
 
-                        (ß reg_rd = armv6m_arith_shift_right(this, reg_rm, (aget this i'imm), FLAGS_NZC))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_arith_shift_right this, reg_rm, (aget this i'imm), flags'NZC))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"B <label>"
@@ -1397,15 +1389,15 @@
                     (§ case code'B)
                     (§
                         ;; Sign extend offset
-                        (ß offset = armv6m_sign_extend(this, (aget this i'imm), 11))
+                        (§ ass offset (armv6m_sign_extend this, (aget this i'imm), 11))
 
                         ;; Convert to words
-                        (ß offset = offset << 1)
+                        (§ ass offset (<< offset 1))
 
                         ;; Make relative to PC + 4
-                        (ß offset = offset + pc + 2)
+                        (§ ass offset (+ offset pc 2))
 
-                        (ß pc = offset)
+                        (§ ass pc offset)
                         (§ break)
                     )
                     #_"BL <label>"
@@ -1413,29 +1405,29 @@
                     (§ case code'BL)
                     (§
                         ;; Sign extend
-                        (ß offset = armv6m_sign_extend(this, (aget this i'imm), 11))
-                        (ß offset <<= 11)
+                        (§ ass offset (armv6m_sign_extend this, (aget this i'imm), 11))
+                        (§ ass offset (<< offset 11))
 
                         ;; Additional range
-                        (ß (aget this i'imm) = (inst2 >>> 0) & 0x7ff)
-                        (ß offset |= (aget this i'imm))
+                        (aset this i'imm (bit-and (>>> inst2 0) 0x7ff))
+                        (§ ass offset (bit-or offset (aget this i'imm)))
 
                         ;; Make relative to PC
-                        (ß offset <<= 1)
-                        (ß offset = offset + pc)
+                        (§ ass offset (<< offset 1))
+                        (§ ass offset (+ offset pc))
 
-                        ;; (aget this i'rd) = reg'LR
-                        (ß reg_rd = (pc + 2) | 1)
-                        (ß write_rd = true)
+                     ;; (aset this i'rd reg'LR)
+                        (§ ass reg_rd (bit-or (+ pc 2) 1))
+                        (§ ass write_rd true)
 
-                        (ß pc = offset + 2)
+                        (§ ass pc (+ offset 2))
                         (§ break)
                     )
                     #_"CMP <Rn>,#<imm8>"
                     #_"0 0 1 0 1 Rn imm8"
                     (§ case code'CMP)
                     (§
-                        (ß reg_rd = armv6m_add_with_carry(this, reg_rn, (bit-not (aget this i'imm)), 1, ALL_FLAGS))
+                        (§ ass reg_rd (armv6m_add_with_carry this, reg_rn, (bit-not (aget this i'imm)), 1, flags'all))
                         ;; No writeback
                         (§ break)
                     )
@@ -1443,85 +1435,85 @@
                     #_"1 1 0 0 1 Rn register_list"
                     #_"LDM <Rn>,<registers> <Rn> included in <registers>"
                     #_"1 1 0 0 1 Rn register_list"
-                 ;; case code'LDM_1:
+                 ;; (§ case code'LDM_1)
                     (§ case code'LDM)
                     (§
-                        (§ for (#_"s32" i = 0; i < REGISTERS && (aget this i'reglist) != 0; i++)
-                            (when (ß (aget this i'reglist) & (1 << i))
-                                (ß (aget this i'regfile)[i] = cpu''read32(this, reg_rn))
-                                (when (ß i == reg'PC)
-                                    (when (ß ((aget this i'regfile)[i] & EXC_RETURN) != EXC_RETURN)
-                                        (ß (aget this i'regfile)[i] &= (bit-not 1))
+                        (§ for (§ ass #_"s32" i 0) (and (< i REGISTERS) (not (zero? (aget this i'reglist)))) (§ ass i (inc i))
+                            (when-not (zero? (bit-and (aget this i'reglist) (<< 1 i)))
+                                (aset (aget this i'regfile) i (cpu''read32 this, reg_rn))
+                                (when (= i reg'PC)
+                                    (when-not (= (bit-and (aget (aget this i'regfile) i) EXC_RETURN) EXC_RETURN)
+                                        (aset (aget this i'regfile) i (bit-and (aget (aget this i'regfile) i) (bit-not 1)))
                                     )
-                                    (ß pc = (aget this i'regfile)[i])
+                                    (§ ass pc (aget (aget this i'regfile) i))
                                 )
-                                (ß reg_rn = reg_rn + 4)
-                                (ß (aget this i'reglist) &= (bit-not (1 << i)))
+                                (§ ass reg_rn (+ reg_rn 4))
+                                (aset this i'reglist (bit-and (aget this i'reglist) (bit-not (<< 1 i))))
                             )
                         )
 
-                        (ß (aget this i'regfile)[(aget this i'rd)] = reg_rn)
-                        (ß assert((aget this i'rd) != reg'PC))
+                        (aset (aget this i'regfile) (aget this i'rd) reg_rn)
+                        (§ assert (not (= (aget this i'rd) reg'PC)))
                         (§ break)
                     )
                     #_"LDR <Rt>, [<Rn>{,#<imm5>}]"
                     #_"0 1 1 0 1 imm5 Rn Rt"
                     (§ case code'LDR)
                     (§
-                        (ß (aget this i'regfile)[(aget this i'rt)] = cpu''read32(this, reg_rn + ((aget this i'imm) << 2)))
-                        (ß assert((aget this i'rd) != reg'PC))
+                        (aset (aget this i'regfile) (aget this i'rt) (cpu''read32 this, (+ reg_rn (<< (aget this i'imm) 2))))
+                        (§ assert (not (= (aget this i'rd) reg'PC)))
                         (§ break)
                     )
                     #_"LDR <Rt>,[SP{,#<imm8>}]"
                     #_"1 0 0 1 1 Rt imm8"
                     (§ case code'LDR_1)
                     (§
-                        (ß (aget this i'regfile)[(aget this i'rt)] = cpu''read32(this, reg_rn + ((aget this i'imm) << 2)))
-                        (ß assert((aget this i'rd) != reg'PC))
+                        (aset (aget this i'regfile) (aget this i'rt) (cpu''read32 this, (+ reg_rn (<< (aget this i'imm) 2))))
+                        (§ assert (not (= (aget this i'rd) reg'PC)))
                         (§ break)
                     )
                     #_"LDR <Rt>,<label>"
                     #_"0 1 0 0 1 Rt imm8"
                     (§ case code'LDR_2)
                     (§
-                        (ß (aget this i'regfile)[(aget this i'rt)] = cpu''read32(this, ((aget this i'regfile)[reg'PC] & 0xfffffffc) + ((aget this i'imm) << 2) + 4))
-                        (ß assert((aget this i'rd) != reg'PC))
+                        (aset (aget this i'regfile) (aget this i'rt) (cpu''read32 this, (+ (bit-and (aget (aget this i'regfile) reg'PC) 0xfffffffc) (<< (aget this i'imm) 2) 4)))
+                        (§ assert (not (= (aget this i'rd) reg'PC)))
                         (§ break)
                     )
                     #_"LDRB <Rt>,[<Rn>{,#<imm5>}]"
                     #_"0 1 1 1 1 imm5 Rn Rt"
                     (§ case code'LDRB)
                     (§
-                        (ß (aget this i'regfile)[(aget this i'rt)] = cpu''read8(this, reg_rn + (aget this i'imm)))
+                        (aset (aget this i'regfile) (aget this i'rt) (cpu''read8 this, (+ reg_rn (aget this i'imm))))
                         (§ break)
                     )
                     #_"LDRH <Rt>,[<Rn>{,#<imm5>}]"
                     #_"1 0 0 0 1 imm5 Rn Rt"
                     (§ case code'LDRH)
                     (§
-                        (ß (aget this i'regfile)[(aget this i'rt)] = cpu''read16(this, reg_rn + ((aget this i'imm) << 1)))
+                        (aset (aget this i'regfile) (aget this i'rt) (cpu''read16 this, (+ reg_rn (<< (aget this i'imm) 1))))
                         (§ break)
                     )
                     #_"LSLS <Rd>,<Rm>,#<imm5>"
                     #_"0 0 0 0 0 imm5 Rm Rd"
                     #_"MOVS <Rd>,<Rm>"
                     #_"0 0 0 0 0 0 0 0 0 0 Rm Rd"
-                 ;; case code'MOVS_1:
+                 ;; (§ case code'MOVS_1)
                     (§ case code'LSLS)
                     (§
-                        (if (ß (aget this i'imm) == 0)
+                        (if (zero? (aget this i'imm))
                             (do
                                 ;; MOVS <Rd>,<Rm>
-                                (ß reg_rd = reg_rm)
-                                (ß write_rd = true)
+                                (§ ass reg_rd reg_rm)
+                                (§ ass write_rd true)
 
-                                ;; Update N & Z
-                                (ß armv6m_update_n_z_flags(this, reg_rd))
+                                ;; Update N and Z
+                                (armv6m_update_n_z_flags this, reg_rd)
                             )
                             (do
                                 ;; LSLS <Rd>,<Rm>,#<imm5>
-                                (ß reg_rd = armv6m_shift_left(this, reg_rm, (aget this i'imm), FLAGS_NZC))
-                                (ß write_rd = true)
+                                (§ ass reg_rd (armv6m_shift_left this, reg_rm, (aget this i'imm), flags'NZC))
+                                (§ ass write_rd true)
                             )
                         )
                         (§ break)
@@ -1530,76 +1522,76 @@
                     #_"0 0 0 0 1 imm5 Rm Rd"
                     (§ case code'LSRS)
                     (§
-                        (when (ß (aget this i'imm) == 0)
-                            (ß (aget this i'imm) = 32)
+                        (when (zero? (aget this i'imm))
+                            (aset this i'imm 32)
                         )
 
-                        (ß reg_rd = armv6m_shift_right(this, reg_rm, (aget this i'imm), FLAGS_NZC))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_shift_right this, reg_rm, (aget this i'imm), flags'NZC))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"MOVS <Rd>,#<imm8>"
                     #_"0 0 1 0 0 Rd imm8"
                     (§ case code'MOVS)
                     (§
-                        (ß reg_rd = (aget this i'imm))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (aget this i'imm))
+                        (§ ass write_rd true)
 
-                        (ß armv6m_update_n_z_flags(this, reg_rd))
+                        (armv6m_update_n_z_flags this, reg_rd)
                         (§ break)
                     )
                     #_"STM <Rn>!,<registers>"
                     #_"1 1 0 0 0 Rn register_list"
                     (§ case code'STM)
                     (§
-                        (ß #_"u32" addr = reg_rn)
+                        (§ ass #_"u32" addr reg_rn)
 
-                        (§ for (#_"s32" i = 0; i < REGISTERS && (aget this i'reglist) != 0; i++)
-                            (when (ß (aget this i'reglist) & (1 << i))
-                                (ß cpu''write32(this, addr, (aget this i'regfile)[i]))
-                                (ß addr = addr + 4)
-                                (ß (aget this i'reglist) &= (bit-not (1 << i)))
+                        (§ for (§ ass #_"s32" i 0) (and (< i REGISTERS) (not (zero? (aget this i'reglist)))) (§ ass i (inc i))
+                            (when-not (zero? (bit-and (aget this i'reglist) (<< 1 i)))
+                                (cpu''write32 this, addr, (aget (aget this i'regfile) i))
+                                (§ ass addr (+ addr 4))
+                                (aset this i'reglist (bit-and (aget this i'reglist) (bit-not (<< 1 i))))
                             )
                         )
 
-                        (ß reg_rd = addr)
-                        (ß write_rd = true)
+                        (§ ass reg_rd addr)
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"STR <Rt>, [<Rn>{,#<imm5>}]"
                     #_"0 1 1 0 0 imm5 Rn Rt"
                     (§ case code'STR)
                     (§
-                        (ß cpu''write32(this, reg_rn + ((aget this i'imm) << 2), (aget this i'regfile)[(aget this i'rt)]))
+                        (cpu''write32 this, (+ reg_rn (<< (aget this i'imm) 2)), (aget (aget this i'regfile) (aget this i'rt)))
                         (§ break)
                     )
                     #_"STR <Rt>,[SP,#<imm8>]"
                     #_"1 0 0 1 0 Rt imm8"
                     (§ case code'STR_1)
                     (§
-                        (ß cpu''write32(this, reg_rn + ((aget this i'imm) << 2), (aget this i'regfile)[(aget this i'rt)]))
+                        (cpu''write32 this, (+ reg_rn (<< (aget this i'imm) 2)), (aget (aget this i'regfile) (aget this i'rt)))
                         (§ break)
                     )
                     #_"STRB <Rt>,[<Rn>,#<imm5>]"
                     #_"0 1 1 1 0 imm5 Rn Rt"
                     (§ case code'STRB)
                     (§
-                        (ß cpu''write8(this, reg_rn + (aget this i'imm), (aget this i'regfile)[(aget this i'rt)]))
+                        (cpu''write8 this, (+ reg_rn (aget this i'imm)), (aget (aget this i'regfile) (aget this i'rt)))
                         (§ break)
                     )
                     #_"STRH <Rt>,[<Rn>{,#<imm5>}]"
                     #_"1 0 0 0 0 imm5 Rn Rt"
                     (§ case code'STRH)
                     (§
-                        (ß cpu''write16(this, reg_rn + ((aget this i'imm) << 1), (aget this i'regfile)[(aget this i'rt)]))
+                        (cpu''write16 this, (+ reg_rn (<< (aget this i'imm) 1)), (aget (aget this i'regfile) (aget this i'rt)))
                         (§ break)
                     )
                     #_"SUBS <Rdn>,#<imm8>"
                     #_"0 0 1 11 Rdn imm8"
                     (§ case code'SUBS_1)
                     (§
-                        (ß reg_rd = armv6m_add_with_carry(this, reg_rn, (bit-not (aget this i'imm)), 1, ALL_FLAGS))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_add_with_carry this, reg_rn, (bit-not (aget this i'imm)), 1, flags'all))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                 )
@@ -1607,150 +1599,150 @@
             )
             (§ case code'IGRP2)
             (§
-                (§ switch (inst & mask'IGRP2)
+                (§ switch (bit-and inst mask'IGRP2)
                     #_"ADDS <Rd>,<Rn>,#<imm3>"
                     #_"0 0 0 1 1 1 0 imm3 Rn Rd"
                     (§ case code'ADDS)
                     (§
-                        (ß reg_rd = armv6m_add_with_carry(this, reg_rn, (aget this i'imm), 0, ALL_FLAGS))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_add_with_carry this, reg_rn, (aget this i'imm), 0, flags'all))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"ADDS <Rd>,<Rn>,<Rm>"
                     #_"0 0 0 1 1 0 0 Rm Rn Rd"
                     (§ case code'ADDS_2)
                     (§
-                        (ß reg_rd = armv6m_add_with_carry(this, reg_rn, reg_rm, 0, ALL_FLAGS))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_add_with_carry this, reg_rn, reg_rm, 0, flags'all))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"LDR <Rt>,[<Rn>,<Rm>]"
                     #_"0 1 0 1 1 0 0 Rm Rn Rt"
                     (§ case code'LDR_3)
                     (§
-                        (ß (aget this i'regfile)[(aget this i'rt)] = cpu''read32(this, reg_rn + reg_rm))
-                        (ß assert((aget this i'rt) != reg'PC))
+                        (aset (aget this i'regfile) (aget this i'rt) (cpu''read32 this, (+ reg_rn reg_rm)))
+                        (§ assert (not (= (aget this i'rt) reg'PC)))
                         (§ break)
                     )
                     #_"LDRB <Rt>,[<Rn>,<Rm>]"
                     #_"0 1 0 1 1 1 0 Rm Rn Rt"
                     (§ case code'LDRB_1)
                     (§
-                        (ß (aget this i'regfile)[(aget this i'rt)] = cpu''read8(this, reg_rn + reg_rm))
+                        (aset (aget this i'regfile) (aget this i'rt) (cpu''read8 this, (+ reg_rn reg_rm)))
                         (§ break)
                     )
                     #_"LDRH <Rt>,[<Rn>,<Rm>]"
                     #_"0 1 0 1 1 0 1 Rm Rn Rt"
                     (§ case code'LDRH_1)
                     (§
-                        (ß (aget this i'regfile)[(aget this i'rt)] = cpu''read16(this, reg_rn + reg_rm))
+                        (aset (aget this i'regfile) (aget this i'rt) (cpu''read16 this, (+ reg_rn reg_rm)))
                         (§ break)
                     )
                     #_"LDRSB <Rt>,[<Rn>,<Rm>]"
                     #_"0 1 0 1 0 1 1 Rm Rn Rt"
                     (§ case code'LDRSB)
                     (§
-                        (ß reg_rd = cpu''read8(this, reg_rn + reg_rm))
-                        (ß (aget this i'regfile)[(aget this i'rt)] = armv6m_sign_extend(this, reg_rd, 8))
+                        (§ ass reg_rd (cpu''read8 this, (+ reg_rn reg_rm)))
+                        (aset (aget this i'regfile) (aget this i'rt) (armv6m_sign_extend this, reg_rd, 8))
                         (§ break)
                     )
                     #_"LDRSH <Rt>,[<Rn>,<Rm>]"
                     #_"0 1 0 1 1 1 1 Rm Rn Rt"
                     (§ case code'LDRSH)
                     (§
-                        (ß reg_rd = cpu''read16(this, reg_rn + reg_rm))
-                        (ß (aget this i'regfile)[(aget this i'rt)] = armv6m_sign_extend(this, reg_rd, 16))
+                        (§ ass reg_rd (cpu''read16 this, (+ reg_rn reg_rm)))
+                        (aset (aget this i'regfile) (aget this i'rt) (armv6m_sign_extend this, reg_rd, 16))
                         (§ break)
                     )
                     #_"POP <registers>"
                     #_"1 0 1 1 1 1 0 P register_list"
                     (§ case code'POP)
                     (§
-                        (ß #_"u32" sp = (aget this i'regfile)[reg'SP])
+                        (§ ass #_"u32" sp (aget (aget this i'regfile) reg'SP))
 
-                        (§ for (#_"s32" i = 0; i < REGISTERS && (aget this i'reglist) != 0; i++)
-                            (when (ß (aget this i'reglist) & (1 << i))
-                                (ß (aget this i'regfile)[i] = cpu''read32(this, sp))
+                        (§ for (§ ass #_"s32" i 0) (and (< i REGISTERS) (not (zero? (aget this i'reglist)))) (§ ass i (inc i))
+                            (when-not (zero? (bit-and (aget this i'reglist) (<< 1 i)))
+                                (aset (aget this i'regfile) i (cpu''read32 this, sp))
 
-                                (ß sp = sp + 4)
+                                (§ ass sp (+ sp 4))
 
-                                (when (ß i == reg'PC)
-                                    (when (ß ((aget this i'regfile)[i] & EXC_RETURN) != EXC_RETURN)
-                                        (ß (aget this i'regfile)[i] &= (bit-not 1))
+                                (when (= i reg'PC)
+                                    (when-not (= (bit-and (aget (aget this i'regfile) i) EXC_RETURN) EXC_RETURN)
+                                        (aset (aget this i'regfile) i (bit-and (aget (aget this i'regfile) i) (bit-not 1)))
                                     )
-                                    (ß pc = (aget this i'regfile)[i])
+                                    (§ ass pc (aget (aget this i'regfile) i))
                                 )
 
-                                (ß (aget this i'reglist) &= (bit-not (1 << i)))
+                                (aset this i'reglist (bit-and (aget this i'reglist) (bit-not (<< 1 i))))
                             )
                         )
 
-                        (ß armv6m_update_sp(this, sp))
+                        (armv6m_update_sp this, sp)
                         (§ break)
                     )
                     #_"PUSH <registers>"
                     #_"1 0 1 1 0 1 0 M register_list"
                     (§ case code'PUSH)
                     (§
-                        (ß #_"u32" sp = (aget this i'regfile)[reg'SP])
-                        (ß #_"u32" addr = sp)
-                        (ß #_"s32" bits_set = 0)
+                        (§ ass #_"u32" sp (aget (aget this i'regfile) reg'SP))
+                        (§ ass #_"u32" addr sp)
+                        (§ ass #_"s32" bits_set 0)
 
-                        (§ for (#_"s32" i = 0; i < REGISTERS; i++)
-                            (when (ß (aget this i'reglist) & (1 << i))
-                                (ß bits_set++)
+                        (§ for (§ ass #_"s32" i 0) (< i REGISTERS) (§ ass i (inc i))
+                            (when-not (zero? (bit-and (aget this i'reglist) (<< 1 i)))
+                                (§ ass bits_set (inc bits_set))
                             )
                         )
 
-                        (ß addr = addr - (4 * bits_set))
+                        (§ ass addr (- addr (* 4 bits_set)))
 
-                        (§ for (#_"s32" i = 0; i < REGISTERS && (aget this i'reglist) != 0; i++)
-                            (when (ß (aget this i'reglist) & (1 << i))
-                                (ß cpu''write32(this, addr, (aget this i'regfile)[i]))
-                                (ß sp = sp - 4)
-                                (ß addr = addr + 4)
-                                (ß (aget this i'reglist) &= (bit-not (1 << i)))
+                        (§ for (§ ass #_"s32" i 0) (and (< i REGISTERS) (not (zero? (aget this i'reglist)))) (§ ass i (inc i))
+                            (when-not (zero? (bit-and (aget this i'reglist) (<< 1 i)))
+                                (cpu''write32 this, addr, (aget (aget this i'regfile) i))
+                                (§ ass sp (- sp 4))
+                                (§ ass addr (+ addr 4))
+                                (aset this i'reglist (bit-and (aget this i'reglist) (bit-not (<< 1 i))))
                             )
                         )
 
-                        (ß armv6m_update_sp(this, sp))
+                        (armv6m_update_sp this, sp)
                         (§ break)
                     )
                     #_"STR <Rt>,[<Rn>,<Rm>]"
                     #_"0 1 0 1 0 00 Rm Rn Rt"
                     (§ case code'STR_2)
                     (§
-                        (ß cpu''write32(this, reg_rn + reg_rm, (aget this i'regfile)[(aget this i'rt)]))
+                        (cpu''write32 this, (+ reg_rn reg_rm), (aget (aget this i'regfile) (aget this i'rt)))
                         (§ break)
                     )
                     #_"STRB <Rt>,[<Rn>,<Rm>]"
                     #_"0 1 0 1 0 1 0 Rm Rn Rt"
                     (§ case code'STRB_1)
                     (§
-                        (ß cpu''write8(this, reg_rn + reg_rm, (aget this i'regfile)[(aget this i'rt)]))
+                        (cpu''write8 this, (+ reg_rn reg_rm), (aget (aget this i'regfile) (aget this i'rt)))
                         (§ break)
                     )
                     #_"STRH <Rt>,[<Rn>,<Rm>]"
                     #_"0 1 0 1 0 0 1 Rm Rn Rt"
                     (§ case code'STRH_1)
                     (§
-                        (ß cpu''write16(this, reg_rn + reg_rm, (aget this i'regfile)[(aget this i'rt)]))
+                        (cpu''write16 this, (+ reg_rn reg_rm), (aget (aget this i'regfile) (aget this i'rt)))
                         (§ break)
                     )
                     #_"SUBS <Rd>,<Rn>,#<imm3>"
                     #_"0 0 0 11 1 1 imm3 Rn Rd"
                     (§ case code'SUBS)
                     (§
-                        (ß reg_rd = armv6m_add_with_carry(this, reg_rn, (bit-not (aget this i'imm)), 1, ALL_FLAGS))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_add_with_carry this, reg_rn, (bit-not (aget this i'imm)), 1, flags'all))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"SUBS <Rd>,<Rn>,<Rm>"
                     #_"0 0 0 11 0 1 Rm Rn Rd"
                     (§ case code'SUBS_2)
                     (§
-                        (ß reg_rd = armv6m_add_with_carry(this, reg_rn, (bit-not reg_rm), 1, ALL_FLAGS))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_add_with_carry this, reg_rn, (bit-not reg_rm), 1, flags'all))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                 )
@@ -1758,13 +1750,13 @@
             )
             (§ case code'IGRP3)
             (§
-                (§ switch (inst & mask'IGRP3)
+                (§ switch (bit-and inst mask'IGRP3)
                     #_"ADD <Rdn>,<Rm>"
                     #_"0 1 0 0 0 1 0 0 Rm Rdn"
                     (§ case code'ADD)
                     (§
-                        (ß reg_rd = reg_rn + reg_rm)
-                        (ß write_rd = true)
+                        (§ ass reg_rd (+ reg_rn reg_rm))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"BKPT #<imm8>"
@@ -1778,25 +1770,25 @@
                     #_"0 1 0 0 0 1 0 1 N Rm Rn"
                     (§ case code'CMP_2)
                     (§
-                        (ß reg_rd = armv6m_add_with_carry(this, reg_rn, (bit-not reg_rm), 1, ALL_FLAGS))
+                        (§ ass reg_rd (armv6m_add_with_carry this, reg_rn, (bit-not reg_rm), 1, flags'all))
                         (§ break)
                     )
                     #_"MOV <Rd>,<Rm> Otherwise all versions of the Thumb instruction set."
                     #_"0 1 0 0 0 1 1 0 D Rm Rd"
                     (§ case code'MOV)
                     (§
-                        (if (ß (aget this i'rd) == reg'PC)
+                        (if (= (aget this i'rd) reg'PC)
                             (do
                                 ;; Write to PC
-                                (ß pc = reg_rm & (bit-not 1))
+                                (§ ass pc (bit-and reg_rm (bit-not 1)))
 
                                 ;; Don't do normal writeback
-                                (ß write_rd = false)
+                                (§ ass write_rd false)
                             )
                             (do
                                 ;; Normal register
-                                (ß reg_rd = reg_rm)
-                                (ß write_rd = true)
+                                (§ ass reg_rd reg_rm)
+                                (§ ass write_rd true)
                             )
                         )
                         (§ break)
@@ -1805,14 +1797,14 @@
                     #_"1 1 0 1 111 1 imm8"
                     (§ case code'SVC)
                     (§
-                        (ß pc = armv6m_exception(this, pc, 11))
+                        (§ ass pc (armv6m_exception this, pc, 11))
                         (§ break)
                     )
                     #_"UDF #<imm8>"
                     #_"1 1 0 1 1 1 1 0 imm8"
                     (§ case code'UDF)
                     (§
-                        (ß assert(!"Not implemented"))
+                        ;; Not implemented
                         (§ break)
                     )
                 )
@@ -1820,39 +1812,39 @@
             )
             (§ case code'IGRP4)
             (§
-                (§ switch (inst & mask'IGRP4)
+                (§ switch (bit-and inst mask'IGRP4)
                     #_"ADD SP,SP,#<imm7>"
                     #_"1 0 1 1 0 0 0 0 0 imm7"
                     (§ case code'ADD_2)
                     (§
-                        (ß reg_rd = reg_rn + ((aget this i'imm) << 2))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (+ reg_rn (<< (aget this i'imm) 2)))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"BLX <Rm>"
                     #_"0 1 0 0 0 1 1 1 1 Rm (0) (0) (0)"
                     (§ case code'BLX)
                     (§
-                        ;; (aget this i'rd) = reg'LR
-                        (ß reg_rd = pc | 1)
-                        (ß write_rd = true)
+                     ;; (aset this i'rd reg'LR)
+                        (§ ass reg_rd (bit-or pc 1))
+                        (§ ass write_rd true)
 
-                        (ß pc = reg_rm & (bit-not 1))
+                        (§ ass pc (bit-and reg_rm (bit-not 1)))
                         (§ break)
                     )
                     #_"BX <Rm>"
                     #_"0 1 0 0 0 1 1 1 0 Rm (0) (0) (0)"
                     (§ case code'BX)
                     (§
-                        (ß pc = reg_rm & (bit-not 1))
+                        (§ ass pc (bit-and reg_rm (bit-not 1)))
                         (§ break)
                     )
                     #_"SUB SP,SP,#<imm7>"
                     #_"1 0 1 1 000 0 1 imm7"
                     (§ case code'SUB)
                     (§
-                        (ß reg_rd = reg_rn - ((aget this i'imm) << 2))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (- reg_rn (<< (aget this i'imm) 2)))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                 )
@@ -1860,82 +1852,82 @@
             )
             (§ case code'IGRP5)
             (§
-                (§ switch (inst & mask'IGRP5)
+                (§ switch (bit-and inst mask'IGRP5)
                     #_"ADCS <Rdn>,<Rm>"
                     #_"0 1 0 0 0 0 0 1 0 1 Rm Rdn"
                     (§ case code'ADCS)
                     (§
-                        (ß reg_rd = armv6m_add_with_carry(this, reg_rn, reg_rm, ((aget this i'apsr) & APSR_C) ? 1 : 0, ALL_FLAGS))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_add_with_carry this, reg_rn, reg_rm, (if (zero? (bit-and (aget this i'apsr) flag'C)) 0 1), flags'all))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"ANDS <Rdn>,<Rm>"
                     #_"0 1 0 0 0 0 0 0 0 0 Rm Rdn"
                     (§ case code'ANDS)
                     (§
-                        (ß reg_rd = reg_rn & reg_rm)
-                        (ß write_rd = true)
+                        (§ ass reg_rd (bit-and reg_rn reg_rm))
+                        (§ ass write_rd true)
 
-                        (ß armv6m_update_n_z_flags(this, reg_rd))
+                        (armv6m_update_n_z_flags this, reg_rd)
                         (§ break)
                     )
                     #_"ASRS <Rdn>,<Rm>"
                     #_"0 1 0 0 0 0 0 1 0 0 Rm Rdn"
                     (§ case code'ASRS_1)
                     (§
-                        (ß reg_rd = armv6m_arith_shift_right(this, reg_rn, reg_rm, FLAGS_NZC))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_arith_shift_right this, reg_rn, reg_rm, flags'NZC))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"BICS <Rdn>,<Rm>"
                     #_"0 1 0 0 0 0 1 1 1 0 Rm Rdn"
                     (§ case code'BICS)
                     (§
-                        (ß reg_rd = reg_rn & (bit-not reg_rm))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (bit-and reg_rn (bit-not reg_rm)))
+                        (§ ass write_rd true)
 
-                        (ß armv6m_update_n_z_flags(this, reg_rd))
+                        (armv6m_update_n_z_flags this, reg_rd)
                         (§ break)
                     )
                     #_"CMN <Rn>,<Rm>"
                     #_"0 1 0 0 0 0 1 0 1 1 Rm Rn"
                     (§ case code'CMN)
                     (§
-                        (ß reg_rd = armv6m_add_with_carry(this, reg_rn, reg_rm, 0, ALL_FLAGS))
+                        (§ ass reg_rd (armv6m_add_with_carry this, reg_rn, reg_rm, 0, flags'all))
                         (§ break)
                     )
                     #_"CMP <Rn>,<Rm> <Rn> and <Rm> both from R0-R7"
                     #_"0 1 0 0 0 0 1 0 1 0 Rm Rn"
                     (§ case code'CMP_1)
                     (§
-                        (ß reg_rd = armv6m_add_with_carry(this, reg_rn, (bit-not reg_rm), 1, ALL_FLAGS))
+                        (§ ass reg_rd (armv6m_add_with_carry this, reg_rn, (bit-not reg_rm), 1, flags'all))
                         (§ break)
                     )
                     #_"EORS <Rdn>,<Rm>"
                     #_"0 1 0 0 0 0 0 0 0 1 Rm Rdn"
                     (§ case code'EORS)
                     (§
-                        (ß reg_rd = reg_rn ^ reg_rm)
-                        (ß write_rd = true)
+                        (§ ass reg_rd (bit-xor reg_rn reg_rm))
+                        (§ ass write_rd true)
 
-                        (ß armv6m_update_n_z_flags(this, reg_rd))
+                        (armv6m_update_n_z_flags this, reg_rd)
                         (§ break)
                     )
                     #_"LSLS <Rdn>,<Rm>"
                     #_"0 1 0 0 0 0 0 0 1 0 Rm Rdn"
                     (§ case code'LSLS_1)
                     (§
-                        (if (ß reg_rm == 0)
+                        (if (zero? reg_rm)
                             (do
-                                (ß reg_rd = reg_rn)
-                                (ß write_rd = true)
+                                (§ ass reg_rd reg_rn)
+                                (§ ass write_rd true)
 
-                                ;; Update N & Z
-                                (ß armv6m_update_n_z_flags(this, reg_rd))
+                                ;; Update N and Z
+                                (armv6m_update_n_z_flags this, reg_rd)
                             )
                             (do
-                                (ß reg_rd = armv6m_shift_left(this, reg_rn, reg_rm, FLAGS_NZC))
-                                (ß write_rd = true)
+                                (§ ass reg_rd (armv6m_shift_left this, reg_rn, reg_rm, flags'NZC))
+                                (§ ass write_rd true)
                             )
                         )
                         (§ break)
@@ -1944,141 +1936,134 @@
                     #_"0 1 0 0 0 0 0 0 1 1 Rm Rdn"
                     (§ case code'LSRS_1)
                     (§
-                        (ß reg_rd = armv6m_shift_right(this, reg_rn, reg_rm & 0xff, FLAGS_NZC))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_shift_right this, reg_rn, (bit-and reg_rm 0xff), flags'NZC))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"MULS <Rdm>,<Rn>,<Rdm>"
                     #_"0 1 0 0 0 0 1 1 0 1 Rn Rdm"
                     (§ case code'MULS)
                     (§
-                        (ß reg_rd = reg_rn * reg_rm)
-                        (ß write_rd = true)
+                        (§ ass reg_rd (* reg_rn reg_rm))
+                        (§ ass write_rd true)
 
-                        (ß armv6m_update_n_z_flags(this, reg_rd))
+                        (armv6m_update_n_z_flags this, reg_rd)
                         (§ break)
                     )
                     #_"MVNS <Rd>,<Rm>"
                     #_"0 1 0 0 0 0 1 1 1 1 Rm Rd"
                     (§ case code'MVNS)
                     (§
-                        (ß reg_rd = (bit-not reg_rm))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (bit-not reg_rm))
+                        (§ ass write_rd true)
 
-                        (ß armv6m_update_n_z_flags(this, reg_rd))
+                        (armv6m_update_n_z_flags this, reg_rd)
                         (§ break)
                     )
                     #_"ORRS <Rdn>,<Rm>"
                     #_"0 1 0 0 0 0 1 1 0 0 Rm Rdn"
                     (§ case code'ORRS)
                     (§
-                        (ß reg_rd = reg_rn | reg_rm)
-                        (ß write_rd = true)
+                        (§ ass reg_rd (bit-or reg_rn reg_rm))
+                        (§ ass write_rd true)
 
-                        (ß armv6m_update_n_z_flags(this, reg_rd))
+                        (armv6m_update_n_z_flags this, reg_rd)
                         (§ break)
                     )
                     #_"REV <Rd>,<Rm>"
                     #_"1 0 1 1 1 0 1 0 0 0 Rm Rd"
                     (§ case code'REV)
                     (§
-                        (ß reg_rd = ((reg_rm >>> 0) & 0xff) << 24)
-                        (ß reg_rd |= ((reg_rm >>> 8) & 0xff) << 16)
-                        (ß reg_rd |= ((reg_rm >>> 16) & 0xff) << 8)
-                        (ß reg_rd |= ((reg_rm >>> 24) & 0xff) << 0)
-                        (ß write_rd = true)
+                        (§ ass reg_rd (bit-or (<< (bit-and (>>> reg_rm 0) 0xff) 24) (<< (bit-and (>>> reg_rm 8) 0xff) 16) (<< (bit-and (>>> reg_rm 16) 0xff) 8) (<< (bit-and (>>> reg_rm 24) 0xff) 0)))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"REV16 <Rd>,<Rm>"
                     #_"1 0 1 1 1 0 1 0 0 1 Rm Rd"
                     (§ case code'REV16)
                     (§
-                        (ß reg_rd = ((reg_rm >>> 0) & 0xff) << 8)
-                        (ß reg_rd |= ((reg_rm >>> 8) & 0xff) << 0)
-                        (ß reg_rd |= ((reg_rm >>> 16) & 0xff) << 24)
-                        (ß reg_rd |= ((reg_rm >>> 24) & 0xff) << 16)
-                        (ß write_rd = true)
+                        (§ ass reg_rd (bit-or (<< (bit-and (>>> reg_rm 0) 0xff) 8) (<< (bit-and (>>> reg_rm 8) 0xff) 0) (<< (bit-and (>>> reg_rm 16) 0xff) 24) (<< (bit-and (>>> reg_rm 24) 0xff) 16)))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"REVSH <Rd>,<Rm>"
                     #_"1 0 1 1 1 0 1 0 1 1 Rm Rd"
                     (§ case code'REVSH)
                     (§
-                        (ß reg_rd = ((reg_rm >>> 0) & 0xff) << 8)
-                        (ß reg_rd |= ((reg_rm >>> 8) & 0xff) << 0)
-                        (ß reg_rd = armv6m_sign_extend(this, reg_rd, 16))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (bit-or (<< (bit-and (>>> reg_rm 0) 0xff) 8) (<< (bit-and (>>> reg_rm 8) 0xff) 0)))
+                        (§ ass reg_rd (armv6m_sign_extend this, reg_rd, 16))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"RORS <Rdn>,<Rm>"
                     #_"0 1 0 0 0 0 0 1 1 1 Rm Rdn"
                     (§ case code'RORS)
                     (§
-                        (ß reg_rd = armv6m_rotate_right(this, reg_rn, reg_rm & 0xff, FLAGS_NZC))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_rotate_right this, reg_rn, (bit-and reg_rm 0xff), flags'NZC))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"RSBS <Rd>,<Rn>,#0"
                     #_"0 1 0 0 0 0 1 0 0 1 Rn Rd"
                     (§ case code'RSBS)
                     (§
-                        (ß reg_rd = armv6m_add_with_carry(this, (bit-not reg_rn), 0, 1, ALL_FLAGS))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_add_with_carry this, (bit-not reg_rn), 0, 1, flags'all))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"SBCS <Rdn>,<Rm>"
                     #_"0 1 0 0 0 0 0 1 1 0 Rm Rdn"
                     (§ case code'SBCS)
                     (§
-                        (ß reg_rd = armv6m_add_with_carry(this, reg_rn, (bit-not reg_rm), ((aget this i'apsr) & APSR_C) ? 1 : 0, ALL_FLAGS))
-                        (ß write_rd = true)
+                        (§ ass reg_rd (armv6m_add_with_carry this, reg_rn, (bit-not reg_rm), (if (zero? (bit-and (aget this i'apsr) flag'C)) 0 1), flags'all))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"SXTB <Rd>,<Rm>"
                     #_"1 0 1 1 100 0 0 1 Rm Rd"
                     (§ case code'SXTB)
                     (§
-                        (ß reg_rd = reg_rm & 0xff)
-                        (when (ß reg_rd & 0x80)
-                            (ß reg_rd |= (bit-not 0) << 8)
+                        (§ ass reg_rd (bit-and reg_rm 0xff))
+                        (when-not (zero? (bit-and reg_rd 0x80))
+                            (§ ass reg_rd (bit-or reg_rd (<< (bit-not 0) 8)))
                         )
-                        (ß write_rd = true)
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"SXTH <Rd>,<Rm>"
                     #_"1 0 1 1 100 0 0 0 Rm Rd"
                     (§ case code'SXTH)
                     (§
-                        (ß reg_rd = reg_rm & 0xffff)
-                        (when (ß reg_rd & 0x8000)
-                            (ß reg_rd |= (bit-not 0) << 16)
+                        (§ ass reg_rd (bit-and reg_rm 0xffff))
+                        (when-not (zero? (bit-and reg_rd 0x8000))
+                            (§ ass reg_rd (bit-or reg_rd (<< (bit-not 0) 16)))
                         )
-                        (ß write_rd = true)
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"TST <Rn>,<Rm>"
                     #_"000 1 0 0 1 0 0 0 Rm Rn"
                     (§ case code'TST)
                     (§
-                        (ß reg_rd = reg_rn & reg_rm)
+                        (§ ass reg_rd (bit-and reg_rn reg_rm))
                         ;; No writeback
-                        (ß armv6m_update_n_z_flags(this, reg_rd))
+                        (armv6m_update_n_z_flags this, reg_rd)
                         (§ break)
                     )
                     #_"UXTB <Rd>,<Rm>"
                     #_"1 0 1 1 100 0 1 1 Rm Rd"
                     (§ case code'UXTB)
                     (§
-                        (ß reg_rd = reg_rm & 0xff)
-                        (ß write_rd = true)
+                        (§ ass reg_rd (bit-and reg_rm 0xff))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                     #_"UXTH <Rd>,<Rm>"
                     #_"1 0 1 1 100 0 1 0 Rm Rd"
                     (§ case code'UXTH)
                     (§
-                        (ß reg_rd = reg_rm & 0xffff)
-                        (ß write_rd = true)
+                        (§ ass reg_rd (bit-and reg_rm 0xffff))
+                        (§ ass write_rd true)
                         (§ break)
                     )
                 )
@@ -2086,52 +2071,52 @@
             )
             (§ case code'IGRP6)
             (§
-                (§ switch (inst & mask'IGRP6)
+                (§ switch (bit-and inst mask'IGRP6)
                     #_"MRS <Rd>,<spec_reg>"
                     #_"1 1 1 01 0 1 1 1 1 1 (0) (1) (1) (1) (1) 1 0 (0) 0 Rd SYSm"
                     (§ case code'MRS)
                     (§
-                        (ß #_"u32" sysm = (inst2 >>> 0) & 0xff)
-                        (ß (aget this i'rd) = (inst2 >>> 8) & 0xf)
+                        (§ ass #_"u32" sysm (bit-and (>>> inst2 0) 0xff))
+                        (aset this i'rd (bit-and (>>> inst2 8) 0xf))
 
                         ;; Increment PC past second instruction word
-                        (ß pc = pc + 2)
+                        (§ ass pc (+ pc 2))
 
-                        (§ switch ((sysm >>> 3) & 0x1f)
+                        (§ switch (bit-and (>>> sysm 3) 0x1f)
                             (§ case 0)
                             (§
-                                (ß #_"u32" val = 0)
+                                (§ ass #_"u32" val 0)
 
-                                (when (ß sysm & 0x1)
-                                    (ß val |= (aget this i'ipsr) & 0x1ff)
+                                (when-not (zero? (bit-and sysm 0x1))
+                                    (§ ass val (bit-or val (bit-and (aget this i'ipsr) 0x1ff)))
                                 )
 
-                                (when (ß !(sysm & 0x4))
-                                    (ß val |= ((aget this i'apsr) & 0xf8000000))
+                                (when (zero? (bit-and sysm 0x4))
+                                    (§ ass val (bit-or val (bit-and (aget this i'apsr) 0xf8000000)))
                                 )
 
-                                (ß val |= (aget this i'ipsr))
-                                (ß val |= (aget this i'epsr))
+                                (§ ass val (bit-or val (aget this i'ipsr)))
+                                (§ ass val (bit-or val (aget this i'epsr)))
 
-                                (ß reg_rd = val)
-                                (ß write_rd = true)
+                                (§ ass reg_rd val)
+                                (§ ass write_rd true)
                                 (§ break)
                             )
                             (§ case 1)
                             (§
-                                (§ switch (sysm & 0x7)
+                                (§ switch (bit-and sysm 0x7)
                                     (§ case 0)
                                     (§
                                         ;; Main SP
-                                        (ß reg_rd = (aget this i'msp))
-                                        (ß write_rd = true)
+                                        (§ ass reg_rd (aget this i'msp))
+                                        (§ ass write_rd true)
                                         (§ break)
                                     )
                                     (§ case 1)
                                     (§
                                         ;; Process SP
-                                        (ß reg_rd = (aget this i'psp))
-                                        (ß write_rd = true)
+                                        (§ ass reg_rd (aget this i'psp))
+                                        (§ ass write_rd true)
                                         (§ break)
                                     )
                                 )
@@ -2139,19 +2124,19 @@
                             )
                             (§ case 2)
                             (§
-                                (§ switch (sysm & 0x7)
+                                (§ switch (bit-and sysm 0x7)
                                     (§ case 0)
                                     (§
                                         ;; PRIMASK.PM
-                                        (ß reg_rd = (aget this i'primask) & PRIMASK_PM)
-                                        (ß write_rd = true)
+                                        (§ ass reg_rd (bit-and (aget this i'primask) PRIMASK_PM))
+                                        (§ ass write_rd true)
                                         (§ break)
                                     )
                                     (§ case 4)
                                     (§
                                         ;; Control<1:0>
-                                        (ß reg_rd = (aget this i'control) & CONTROL_MASK)
-                                        (ß write_rd = true)
+                                        (§ ass reg_rd (bit-and (aget this i'control) CONTROL_MASK))
+                                        (§ ass write_rd true)
                                         (§ break)
                                     )
                                 )
@@ -2164,33 +2149,33 @@
                     #_"1 1 1 01 0 1 1 1 0 0 (0) Rn 1 0 (0) 0 (1) (0) (0) (0) SYSm"
                     (§ case code'MSR)
                     (§
-                        (ß #_"u32" sysm = (inst2 >>> 0) & 0xff)
+                        (§ ass #_"u32" sysm (bit-and (>>> inst2 0) 0xff))
 
                         ;; Increment PC past second instruction word
-                        (ß pc = pc + 2)
+                        (§ ass pc (+ pc 2))
 
-                        (§ switch ((sysm >>> 3) & 0x1f)
+                        (§ switch (bit-and (>>> sysm 3) 0x1f)
                             (§ case 0)
                             (§
-                                (when (ß !(sysm & 0x4))
-                                    (ß (aget this i'apsr) = reg_rn & 0xf8000000)
+                                (when (zero? (bit-and sysm 0x4))
+                                    (aset this i'apsr (bit-and reg_rn 0xf8000000))
                                 )
                                 (§ break)
                             )
                             (§ case 1)
                             (§
                                 ;; TODO: Only if privileged...
-                                (§ switch (sysm & 0x7)
+                                (§ switch (bit-and sysm 0x7)
                                     (§ case 0)
                                     (§
                                         ;; Main SP
-                                        (ß (aget this i'msp) = reg_rn)
+                                        (aset this i'msp reg_rn)
                                         (§ break)
                                     )
                                     (§ case 1)
                                     (§
                                         ;; Process SP
-                                        (ß (aget this i'psp) = reg_rn)
+                                        (aset this i'psp reg_rn)
                                         (§ break)
                                     )
                                 )
@@ -2199,23 +2184,23 @@
                             (§ case 2)
                             (§
                                 ;; TODO: Only if privileged...
-                                (§ switch (sysm & 0x7)
+                                (§ switch (bit-and sysm 0x7)
                                     (§ case 0)
                                     (§
                                         ;; PRIMASK.PM
-                                        (ß (aget this i'primask) = reg_rn & PRIMASK_PM)
+                                        (aset this i'primask (bit-and reg_rn PRIMASK_PM))
                                         (§ break)
                                     )
                                     (§ case 4)
                                     (§
                                         ;; Control<1:0>
-                                        (when (ß !(aget this i'handler?))
-                                            (ß (aget this i'control) = reg_rn & CONTROL_MASK)
+                                        (when-not (aget this i'handler?)
+                                            (aset this i'control (bit-and reg_rn CONTROL_MASK))
 
                                             ;; Allow switching of current SP
-                                         ;; (if (ß (aget this i'control) & CONTROL_SPSEL)
-                                         ;;     spsel = SP_MSP;
-                                         ;;     spsel = SP_PSP;
+                                         ;; (if-not (zero? (bit-and (aget this i'control) CONTROL_SPSEL))
+                                         ;;     (§ ass spsel SP_MSP)
+                                         ;;     (§ ass spsel SP_PSP)
                                          ;; )
                                         )
                                         (§ break)
@@ -2232,14 +2217,14 @@
                     (§
                         ;; TODO: Only if privileged...
 
-                        (if (ß (aget this i'imm) == 0)
+                        (if (zero? (aget this i'imm))
                             (do
                                 ;; Enable
-                                (ß (aget this i'primask) &= (bit-not PRIMASK_PM))
+                                (aset this i'primask (bit-and (aget this i'primask) (bit-not PRIMASK_PM)))
                             )
                             (do
                                 ;; Disable
-                                (ß (aget this i'primask) |= PRIMASK_PM)
+                                (aset this i'primask (bit-or (aget this i'primask) PRIMASK_PM))
                             )
                         )
                         (§ break)
@@ -2249,19 +2234,19 @@
             )
             (§ case code'IGRP7)
             (§
-                (§ switch (inst & mask'IGRP7)
+                (§ switch (bit-and inst mask'IGRP7)
                     #_"DMB #<option>"
                     #_"1 1 1 01 0 1 1 1 0 1 1 (1) (1) (1) (1) 1 0 (0) 0 (1) (1) (1) (1) 0 1 0 1 option"
-                 ;; case code'DMB:
+                 ;; (§ case code'DMB)
                     #_"DSB #<option>"
                     #_"1 1 1 01 0 1 1 1 0 1 1 (1) (1) (1) (1) 1 0 (0) 0 (1) (1) (1) (1) 0 1 0 0 option"
-                 ;; case code'DSB:
+                 ;; (§ case code'DSB)
                     #_"ISB #<option>"
                     #_"1 1 1 01 0 1 1 1 0 1 1 (1) (1) (1) (1) 1 0 (0) 0 (1) (1) (1) (1) 0 1 1 0 option"
                     (§ case code'ISB)
                     (§
                         ;; Increment PC past second instruction word
-                        (ß pc = pc + 2)
+                        (§ ass pc (+ pc 2))
                         (§ break)
                     )
                     #_"UDF_W #<imm16>"
@@ -2269,7 +2254,7 @@
                     (§ case code'UDF_W)
                     (§
                         ;; Increment PC past second instruction word
-                        (ß pc = pc + 2)
+                        (§ ass pc (+ pc 2))
                         (§ break)
                     )
                 )
@@ -2277,7 +2262,7 @@
             )
             (§ case code'IGRP8)
             (§
-                (§ switch (inst & mask'IGRP8)
+                (§ switch (bit-and inst mask'IGRP8)
                     #_"NOP"
                     #_"1 0 1 1 1 1 1 1 0 0 0 0 0 0 0 0"
                     (§ case code'NOP)
@@ -2303,14 +2288,14 @@
                     #_"1 0 1 1 1 1 1 1 0 0 1 1 0 0 0 0"
                     (§ case code'WFI)
                     (§
-                        (ß assert(!"Not implemented"))
+                        ;; Not implemented
                         (§ break)
                     )
                     #_"YIELD"
                     #_"1 0 1 1 1 1 1 1 0 0 0 1 0 0 0 0"
                     (§ case code'YIELD)
                     (§
-                        (ß assert(!"Not implemented"))
+                        ;; Not implemented
                         (§ break)
                     )
                 )
@@ -2318,19 +2303,19 @@
             )
         )
 
-        (when (ß write_rd)
-            (if (ß (aget this i'rd) == reg'SP)
-                (ß armv6m_update_sp(this, reg_rd))
-                (ß (aget this i'regfile)[(aget this i'rd)] = reg_rd)
+        (when write_rd
+            (if (= (aget this i'rd) reg'SP)
+                (armv6m_update_sp this, reg_rd)
+                (aset (aget this i'regfile) (aget this i'rd) reg_rd)
             )
         )
 
         ;; Can't perform a writeback to PC using normal mechanism as this is a special register...
-        (when (ß write_rd)
-            (ß assert((aget this i'rd) != reg'PC))
+        (when write_rd
+            (§ assert (not (= (aget this i'rd) reg'PC)))
         )
 
-        (ß (aget this i'regfile)[reg'PC] = pc)
+        (aset (aget this i'regfile) reg'PC pc)
         nil
     )
 )
